@@ -1,0 +1,15 @@
+name: API
+on:
+  push: {branches: [main]}
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: apps/api}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: {go-version-file: apps/api/go.mod, cache-dependency-path: apps/api/go.sum}
+      - run: go test ./...
+      - run: go vet ./...
+      - run: docker build -t githarbour-api .

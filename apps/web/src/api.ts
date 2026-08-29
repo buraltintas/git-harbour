@@ -1,0 +1,4 @@
+import type{Day,Game,Ship,Stats}from'./types';
+const base=import.meta.env.VITE_API_URL||'http://localhost:8080';
+async function request<T>(path:string,init?:RequestInit):Promise<T>{const r=await fetch(base+path,{...init,headers:{'Content-Type':'application/json',Authorization:'Bearer dev-octocat',...init?.headers}});if(!r.ok){const b=await r.json().catch(()=>({error:'Request failed'}));throw new Error(typeof b.error==='string'?b.error:b.error?.message||'Request failed')};return r.json()}
+export const api={session:()=>request('/v1/dev/session',{method:'POST'}),contributions:()=>request<{days:Day[]}>('/v1/me/contributions'),me:()=>request<{login:string;name:string;avatarUrl:string;solo:Stats}>('/v1/me'),create:(startDate:string,fleet:Ship[])=>request<Game>('/v1/games/solo',{method:'POST',body:JSON.stringify({startDate,fleet})}),shot:(id:string,x:number,y:number)=>request<{game:Game}>(`/v1/games/${id}/shots`,{method:'POST',body:JSON.stringify({x,y})})};

@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: githarbour
+      POSTGRES_PASSWORD: githarbour
+      POSTGRES_DB: githarbour
+    ports: ["5432:5432"]
+    volumes: ["githarbour_pg:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U githarbour"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+  api:
+    build: ./apps/api
+    environment:
+      DATABASE_URL: postgres://githarbour:githarbour@postgres:5432/githarbour?sslmode=disable
+      PORT: 8080
+      WEB_ORIGIN: http://localhost:5173
+      PUBLIC_API_URL: http://localhost:8080
+      GITHARBOUR_DEV_AUTH: "true"
+    ports: ["8080:8080"]
+    depends_on:
+      postgres: {condition: service_healthy}
+volumes:
+  githarbour_pg:
