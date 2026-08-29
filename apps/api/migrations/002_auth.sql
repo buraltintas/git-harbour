@@ -29,4 +29,3 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
 );
 
 CREATE INDEX IF NOT EXISTS auth_sessions_active_token_idx ON auth_sessions (token_hash) WHERE revoked_at IS NULL;
-

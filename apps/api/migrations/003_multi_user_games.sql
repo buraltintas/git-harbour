@@ -13,4 +13,3 @@ ALTER TABLE challenges ADD COLUMN IF NOT EXISTS creator_id uuid REFERENCES users
 ALTER TABLE challenges ADD COLUMN IF NOT EXISTS expires_at timestamptz;
 CREATE INDEX IF NOT EXISTS games_player_updated_idx ON games (player_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS contribution_days_user_day_idx ON contribution_days (user_id, day);
-
