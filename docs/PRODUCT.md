@@ -1,27 +1,18 @@
 # GitHarbour product
 
-GitHarbour is a web game built around one product object: a real GitHub contribution calendar. Its promise is **“Your GitHub history is a battlefield.”** A harbour is a frozen 10-week by 7-day slice of that calendar. Contribution intensity gives the board its visual identity but never changes game mechanics.
+GitHarbour’s core object is a real public GitHub contribution calendar: **“Your GitHub history is a battlefield.”** Activity supplies visual identity only and never affects damage, probability, health, turns, or rating.
 
-## Modes
+The complete mode today is **Battle Your History**: sign in with GitHub, select a frozen 10-week harbour, deploy five ships, battle another hidden period through the authoritative Solo AI, reveal it at completion, and update independent Solo stats. Refreshing contribution imports cannot mutate game snapshots.
 
-- **Battle Your History (this vertical slice):** choose and defend one 10-week period; GitHarbour secretly chooses a different period from the same 52-week history; deploy, alternate shots with the AI, reveal the enemy dates at the end, and share the result.
-- **Developer vs Developer (architecture only):** GitHub login, select a harbour, deploy, create a challenge link, opponent joins and deploys, server-authoritative alternating turns, result, PvP Elo, and sharing. There is no matchmaking or social-network layer.
+Every signed-in developer also gets:
 
-## Solo journey
+- an interactive Pages profile at `#/u/{login}`;
+- canonical crawlable API HTML at `/u/{login}`;
+- safe public Solo/PvP projections;
+- a light/dark GitHub README SVG widget;
+- stable completed-battle shares.
 
-The signed-in (or local mock) player moves a 10-week window across a realistic contribution calendar, confirms a harbour, places five ships, and begins a persisted match. The enemy calendar pattern is visible, but its dates and ships stay hidden. Each player gets exactly one shot per turn. At completion the whole history returns with the enemy period highlighted, Solo rating and statistics update, and a result panel provides share copy and a public-share contract.
+GitHub login is the only production authentication method. Public pages exist only after that GitHub user has joined GitHarbour; arbitrary usernames are not auto-created.
 
-## Fairness and identity
-
-Every cell retains date, weekday, contribution count, and contribution level. Counts and levels affect color only—not damage, probability, health, turns, placement, ranking, or AI. Selected boards are immutable snapshots, so later GitHub activity cannot change an existing game.
-
-## Ratings, ranks, and statistics
-
-Solo and PvP records are independent. Solo uses Elo against a configurable 1200-rated AI; PvP will use Elo between players. Ranks are Deckhand (<900), Sailor (900–1099), Officer (1100–1299), Commander (1300–1499), Captain (1500–1699), Admiral (1700–1899), and Fleet Admiral (1900+).
-
-Each mode tracks games, wins, losses, win rate, rating, shots, hits, accuracy, current/longest streak, and average shots per completed win. Terminal updates are transactional and idempotent.
-
-## Sharing
-
-Results support 1200×630 images, public `/s/{shareId}` pages with server-rendered Open Graph/Twitter metadata, and `/share/users/{login}.svg` README statistics. Image rendering is replaceable behind interfaces; a placeholder implementation is sufficient in this slice.
+Developer vs Developer remains architecture-only for the next phase: challenge links, two user snapshots/fleets, locked alternating turns, independent PvP Elo and public results. Matchmaking, chat, feeds, friends, notifications, WebSockets and Supabase Realtime are outside the product.
 

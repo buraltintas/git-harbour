@@ -1,37 +1,99 @@
 # GitHarbour
 
-**Your GitHub history is a battlefield.** GitHarbour turns a frozen 10-week slice of a GitHub contribution calendar into a fair, server-authoritative Battleship-style game.
+**Your GitHub history is a battlefield.** GitHarbour turns a frozen 10-week slice of a developer’s public GitHub contribution calendar into a fair, server-authoritative strategy game.
 
-This repository contains the first complete Solo vertical slice and the persistence/auth/domain seams for challenge-link PvP. Contribution activity affects board appearance only.
+The production shape is deliberately simple: a React/Vite/Primer application on GitHub Pages calls a Go API on Cloud Run, and the API alone accesses Supabase PostgreSQL plus GitHub OAuth/GraphQL. Supabase is managed PostgreSQL only—there is no Supabase Auth, browser SDK, Realtime, Data API, or direct database access.
 
-## Run locally
+## Local development
 
 Requirements: Node 20+, Go 1.25+, Docker, and Docker Compose.
 
 ```bash
 cp .env.example .env
-docker compose up -d postgres
-set -a; source .env; set +a
-(cd apps/api && go run ./cmd/api)
-npm install
+docker compose up --build
+npm ci
 npm run dev:web
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Mock development auth and a deterministic 52-week public contribution calendar work without GitHub credentials. Games persist across refreshes when `DATABASE_URL` is set and PostgreSQL is running. The API also runs without a database using in-memory state for quick UI work.
+Open `http://localhost:5173`. Vite development mode exposes one explicit development-account button; production builds expose only **Continue with GitHub**. Compose runs versioned migrations once before starting the API. Without Docker, set `APP_ENV=development` and `GITHARBOUR_DEV_AUTH=true`; the API may use its development-only memory repository when `DATABASE_URL` is empty.
 
-Run every test with `npm test`; build the production Pages bundle with `npm run build:web`.
+```bash
+npm test
+npm run build:web
+cd apps/api && go vet ./...
+```
 
-## Configuration
+## Production migrations and Supabase setup
 
-Copy `.env.example`. The API uses `DATABASE_URL`, `PORT`, `WEB_ORIGIN`, and `PUBLIC_API_URL`. Production OAuth additionally requires `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_OAUTH_CALLBACK`, and `GITHUB_WEB_CALLBACK`. The web build uses `VITE_API_URL` and `VITE_BASE_PATH`; the Pages workflow sets the repository sub-path automatically.
+1. Create a Supabase project.
+2. Open **Project Settings → Database → Connection string**.
+3. Use the PostgreSQL Session Pooler connection string for Cloud Run where appropriate; retain its required `sslmode` settings.
+4. Store the connection string only as the server-side `DATABASE_URL` (prefer Google Secret Manager).
+5. Run `DATABASE_URL='…' go run ./cmd/migrate up` from `apps/api`, or run the built container once with command `/migrate up`.
+6. Verify `schema_migrations` contains `001_init.sql`, `002_auth.sql`, and `003_multi_user_games.sql`.
+7. Do not configure Supabase Auth.
+8. Do not expose an anon key, service-role key, connection string, or any Supabase credential to the web build.
 
-GitHub OAuth is intentionally API-mediated: the secret and GitHub token stay server-side; the Pages client receives a short-lived one-time exchange code and trades it for a GitHarbour bearer token. The current vertical slice exposes the start endpoint and documented exchange contract; callback/token persistence is the next production-integration step.
+Cloud Run instances never run migrations during startup. In `APP_ENV=production`, a missing/unreachable database or missing schema fails startup; there is no memory fallback. Pool defaults are five maximum connections, zero minimum connections, and a 30-minute maximum connection lifetime.
 
-## Structure
+## GitHub OAuth App setup
 
-- `apps/web` — React, TypeScript, Vite, Primer, TanStack Query, hash-router-ready frontend
-- `apps/api` — Go API, game/AI/rating domain, PostgreSQL integration, migrations, share metadata/SVG endpoints
-- `docs` — product, game rules, architecture, UI, and API sources of truth
-- `.github/workflows` — Pages build/deploy and API CI/container verification
+Create an OAuth App under GitHub **Settings → Developer settings → OAuth Apps**.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for security and persistence boundaries.
+Local:
+
+- Homepage URL: `http://localhost:5173`
+- Authorization callback URL: `http://localhost:8080/auth/github/callback`
+
+Production:
+
+- Homepage URL: `https://buraltintas.github.io/git-harbour/`
+- Authorization callback URL: `<CLOUD_RUN_API_URL>/auth/github/callback`
+
+The Pages app sends the browser to the API. The API validates a single-use state, exchanges the GitHub code server-side, imports the public identity and `contributionCalendar`, discards the GitHub token, and returns through `GITHUB_WEB_CALLBACK` with a 90-second single-use exchange code. The browser exchanges that for an opaque GitHarbour bearer token. No explicit OAuth scope is requested: GitHub documents `(no scope)` as read-only public information, which is sufficient for this public-data MVP.
+
+## Environment placement
+
+GitHub repository variables used by Pages:
+
+- `API_URL`: public Cloud Run base URL. It becomes `VITE_API_URL`.
+
+GitHub repository secrets: none are required by the static Pages build. Never create a `VITE_*` secret.
+
+Cloud Run environment variables:
+
+- `APP_ENV=production`
+- `DB_MAX_CONNS=5`, `DB_MIN_CONNS=0`, `DB_MAX_CONN_LIFETIME=30m`
+- `WEB_ORIGIN=https://buraltintas.github.io`
+- `PUBLIC_API_URL=<CLOUD_RUN_API_URL>`
+- `WEB_APP_URL=https://buraltintas.github.io/git-harbour/#/`
+- `GITHUB_CLIENT_ID`
+- `GITHUB_OAUTH_CALLBACK=<CLOUD_RUN_API_URL>/auth/github/callback`
+- `GITHUB_WEB_CALLBACK=https://buraltintas.github.io/git-harbour/#/auth/callback`
+
+Cloud Run/Google Secret Manager secrets:
+
+- `DATABASE_URL`
+- `GITHUB_CLIENT_SECRET`
+
+GitHub Pages settings:
+
+- Source: **GitHub Actions**
+- Workflow: `.github/workflows/pages.yml`
+- `VITE_BASE_PATH` is set to `/git-harbour/` from the repository name.
+
+## Add GitHarbour to your GitHub profile
+
+Replace `API_URL` and the login with deployed values:
+
+```markdown
+[![GitHarbour Stats](https://API_URL/widgets/octocat.svg)](https://API_URL/u/octocat)
+[![GitHarbour Stats](https://API_URL/widgets/octocat.svg?theme=dark)](https://API_URL/u/octocat)
+[![GitHarbour Stats](https://API_URL/widgets/octocat.svg?theme=light)](https://API_URL/u/octocat)
+```
+
+## Security notes
+
+The static Pages/Cloud Run split prevents a same-origin httpOnly session cookie. The web app therefore stores only the opaque GitHarbour application token in local storage. This creates an honest XSS trade-off: the app uses a restrictive static meta CSP, avoids unsafe HTML and third-party scripts, removes login exchange codes immediately, and never logs tokens. GitHub access tokens and all database credentials remain server-side.
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/API.md](docs/API.md). Full challenge-link PvP remains the next phase.

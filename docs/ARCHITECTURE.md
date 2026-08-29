@@ -1,31 +1,40 @@
 # Architecture
 
-## Repository
+## Production boundary
 
-`apps/web` is a React/Vite/TypeScript GitHub Pages application using Primer, React Router's hash router, and TanStack Query. `apps/api` is an idiomatic Go HTTP service using chi and pgx. PostgreSQL is the durable store, started locally with Docker Compose. SQL migrations live in `apps/api/migrations`.
+`GitHub Pages (React/Vite/Primer) → HTTPS → Cloud Run (Go) → pgx → Supabase PostgreSQL`. The API also calls GitHub OAuth and GraphQL. Supabase is PostgreSQL only; the browser does not know it exists.
 
-## Trust boundary
+GitHub Pages cannot server-render arbitrary per-user metadata. The Pages root is a crawlable static landing page, while the API serves canonical HTML at `/u/{login}` and `/s/{shareId}`. Hash routes such as `#/u/{login}` provide interactive app views without fragile Pages rewrites.
 
-The API is authoritative. Domain packages own fleet validation, shots, AI targeting, Elo, and statistics. HTTP handlers translate requests and return a public game projection. Persistence stores both public and hidden state, but opponent ship coordinates and the enemy date range are omitted until allowed. PostgreSQL row locks and a terminal-update marker serialize turns and make stats updates idempotent.
+## Identity and sessions
 
-For frictionless development, `GITHARBOUR_DEV_AUTH=true` exposes a deterministic mock user and 52-week contribution calendar. Production contribution import uses GitHub GraphQL `contributionCalendar`; HTML is never scraped.
+GitHub’s numeric ID is the durable external identity; current login casing is updated on each sign-in. OAuth state and login exchange codes are random, hashed at rest, expiring, transactionally single-use values. Application sessions are opaque 30-day bearer tokens and only their SHA-256 hashes are stored. GitHub tokens are used synchronously to import public identity/contributions and are discarded.
 
-## Authentication
+The Pages architecture requires storing the GitHarbour token in browser local storage. This is more exposed to XSS than an httpOnly cookie, so dynamic output is escaped, unsafe HTML is avoided, the OAuth code is removed immediately, token values are never logged, and a static meta CSP limits sources. GitHub Pages cannot provide ideal response-header CSP, so the meta policy is a mitigation rather than a complete boundary.
 
-Production uses GitHub OAuth with public identity only and no repository scope. The Pages client opens `GET /auth/github/start`; the API stores OAuth state, handles GitHub's callback, exchanges the GitHub code server-side, imports public contributions, creates a short-lived single-use exchange code, and redirects to the configured web callback. The client immediately posts that code to `/auth/exchange`, receives a GitHarbour bearer token, and removes the code from the URL. GitHub tokens never reach the browser and core sessions do not rely on cross-site cookies.
+## Persistence and concurrency
+
+Production requires `DATABASE_URL`; config uses `pgxpool.ParseConfig`, with conservative configurable limits. Migrations run explicitly via `cmd/migrate`, never during instance startup. A shot transaction selects the authorized user’s game `FOR UPDATE`, selects their Solo stats `FOR UPDATE`, validates/resolves the player and AI turn through the unchanged game domain, persists state, and—if terminal—updates stats and inserts the unique share before commit. Duplicate concurrent requests serialize; a completed state rejects the second request.
+
+The memory repository and mock calendar exist only in development/test with explicit dev auth. Production startup fails for missing/unreachable PostgreSQL or missing auth/game schema.
 
 ## Data model
 
-- `users`, `github_identities`, and `contribution_days` hold identities and normalized public data.
-- `games` represents solo or PvP lifecycle, current turn, winner, frozen board JSON, secret enemy start, and terminal update state.
-- `game_players` supports one solo player plus AI now and two users later, with separate fleet JSON and shot history.
-- `challenges` reserves challenge-link state for PvP.
-- `mode_stats` has one row per user/mode; Solo and PvP ratings never mix.
-- `shares` maps stable public IDs to completed games.
+- `users`: UUID identity, canonical current GitHub login/name/avatar.
+- `github_identities`: durable unique numeric GitHub ID; no OAuth token column after migration 002.
+- `contribution_days`: normalized public date/count/level data refreshed at login.
+- `oauth_states`, `login_exchange_codes`, `auth_sessions`: hashed authentication credentials with expiry/consumption/revocation.
+- `games`: owner, immutable snapshots inside authoritative state, lifecycle and terminal marker.
+- `game_players`: PvP-ready two-side board/fleet/shot boundary; Solo currently uses `games.state`.
+- `mode_stats`: independent Solo/PvP rows.
+- `challenges`: challenge-link preparation only.
+- `shares`: stable unique public result ID per completed game.
 
-Snapshots are embedded in a game and immutable after creation. Pooled transactions lock the game row before shots. Database constraints enforce modes/statuses and unique shot coordinates; the domain enforces geometry and turn order.
+Contribution refresh never touches snapshots inside existing games. Hidden enemy fleet/date state exists in database JSON but is removed from browser projections until completion.
 
-## Deployment
+## Public and deployment surfaces
 
-The web build receives `VITE_API_URL` and `VITE_BASE_PATH`, and is deployed to GitHub Pages by workflow. The API builds into a minimal Cloud Run-compatible container, listens on `PORT`, and uses `DATABASE_URL`. CORS is restricted by `WEB_ORIGIN`.
+The API exposes safe public JSON, canonical HTML, escaped SVG widgets, and completed-game share HTML. CORS echoes only configured origins. Pages receives only public `VITE_API_URL`/`VITE_BASE_PATH`. Cloud Run receives server configuration and secrets; Supabase and GitHub secrets never enter GitHub Actions’ web build.
+
+PvP schemas and independent stats are ready, but challenge creation/joining and PvP turns are intentionally not implemented.
 

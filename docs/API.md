@@ -1,35 +1,33 @@
 # HTTP API
 
-All JSON endpoints are under `/v1`. Production requests use `Authorization: Bearer <GitHarbour token>`. Development mode supplies a local session through `/v1/dev/session`.
+Private JSON routes require `Authorization: Bearer <GitHarbour application token>`.
 
-## Session and contributions
+## Authentication
 
-- `GET /auth/github/start` begins OAuth.
-- `GET /auth/github/callback` completes GitHub exchange server-side and redirects with a one-time code.
-- `POST /auth/exchange {code}` returns `{token, user}` and consumes the code.
-- `POST /v1/dev/session` returns a local token and mock user when enabled.
-- `GET /v1/me` returns identity, separate Solo/PvP stats, and rank.
-- `GET /v1/me/contributions` returns normalized days grouped into 52 aligned weeks.
+- `GET /auth/github/start` creates a hashed 10-minute state and redirects to GitHub with no explicit scope.
+- `GET /auth/github/callback` consumes state, exchanges the GitHub code server-side, imports public data, and redirects with a 90-second exchange code.
+- `POST /auth/exchange {code}` consumes the code and returns `{token,user}`.
+- `POST /auth/logout` revokes the current session.
+- `POST /v1/dev/session` exists only when `APP_ENV` is development/test and `GITHARBOUR_DEV_AUTH=true`.
 
-## Solo games
+## Private user and Solo
 
-- `POST /v1/games/solo {startDate, fleet:[{kind,cells:[{x,y}]}]}` snapshots the selected board, securely chooses another period and enemy fleet, and returns a public game.
-- `GET /v1/games/{id}` returns the persisted public projection.
-- `POST /v1/games/{id}/shots {x,y}` locks the game, validates the player's turn and unique coordinate, resolves the shot, executes one AI turn if needed, and returns the updated projection plus shot events.
+- `GET /v1/me`
+- `GET /v1/me/contributions`
+- `POST /v1/games/solo {startDate,fleet}`
+- `GET /v1/games/{id}`
+- `POST /v1/games/{id}/shots {x,y}`
 
-Before completion the projection includes both contribution patterns but not enemy dates or fleet coordinates. After completion it adds `enemyPeriod`, result, rating delta, updated Solo stats, and `shareId`.
+Game reads/shots are scoped to the authenticated owner. Requests submit only target intent; hit, AI turn, winner, stats and share are derived server-side.
 
-## PvP-ready contracts
+## Public
 
-- `POST /v1/challenges` (future) creates a challenge after the creator's snapshot and fleet are validated.
-- `POST /v1/challenges/{code}/join` (future) accepts the opponent snapshot and fleet.
-- The same game/shot resource supports `mode=pvp`, two user player rows, alternating locked turns, and independent PvP stats.
+- `GET /v1/public/users/{login}` returns the safe public projection.
+- `GET /u/{login}` returns canonical escaped HTML and real 404 HTML for unknown users.
+- `GET /widgets/{login}.svg?theme=light|dark` returns a 480×140 embeddable SVG.
+- `GET /share/users/{login}.svg` remains an alias for widget compatibility.
+- `GET /s/{shareId}` returns completed-game Open Graph/Twitter HTML.
+- `GET /share/games/{shareId}.png` returns the replaceable battle image placeholder for known completed shares.
+- `GET /healthz`
 
-## Sharing and support
-
-- `GET /s/{shareId}` returns server-generated HTML with `og:title`, `og:description`, `og:image`, and `twitter:card=summary_large_image`.
-- `GET /share/games/{shareId}.png` returns a replaceable 1200×630 result renderer.
-- `GET /share/users/{login}.svg` returns a replaceable README stats renderer.
-- `GET /healthz` reports service health.
-
-Errors use `{error:{code,message}}` with appropriate 4xx/5xx status. Clients never submit hit/miss, winner, rating delta, stats delta, enemy range, or AI actions.
+Public DTOs never include GitHub tokens, session/auth fields, email, database identifiers, hidden fleets, or unrevealed enemy dates. Errors use `{error:{code,message}}`.
