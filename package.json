@@ -1,1 +1,15 @@
-{"name":"githarbour","private":true,"workspaces":["apps/web"],"scripts":{"dev:web":"npm --workspace apps/web run dev","build:web":"npm --workspace apps/web run build","test:web":"npm --workspace apps/web run test","test:api":"cd apps/api && GOCACHE=${TMPDIR:-/tmp}/githarbour-go-cache go test ./...","test":"npm run test:web && npm run test:api"}}
+{
+  "name": "githarbour",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace apps/web run dev",
+    "build:web": "npm --workspace apps/web run build",
+    "test:web": "npm --workspace apps/web run test",
+    "test:api": "cd apps/api && GOCACHE=${TMPDIR:-/tmp}/githarbour-go-cache go test ./...",
+    "migrate": "cd apps/api && go run ./cmd/migrate up",
+    "test": "npm run test:web && npm run test:api"
+  }
+}

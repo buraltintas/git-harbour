@@ -15,12 +15,21 @@ services:
   api:
     build: ./apps/api
     environment:
+      APP_ENV: development
       DATABASE_URL: postgres://githarbour:githarbour@postgres:5432/githarbour?sslmode=disable
       PORT: 8080
       WEB_ORIGIN: http://localhost:5173
       PUBLIC_API_URL: http://localhost:8080
       GITHARBOUR_DEV_AUTH: "true"
     ports: ["8080:8080"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  migrate:
+    build: ./apps/api
+    command: ["/migrate", "up"]
+    environment:
+      DATABASE_URL: postgres://githarbour:githarbour@postgres:5432/githarbour?sslmode=disable
+      MIGRATIONS_DIR: /migrations
     depends_on:
       postgres: {condition: service_healthy}
 volumes:

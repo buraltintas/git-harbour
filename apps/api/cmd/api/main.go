@@ -9,7 +9,11 @@ import (
 )
 
 func main() {
-	s := server.New(context.Background())
+	s, err := server.New(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer s.Close()
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
