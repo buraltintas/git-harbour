@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://buraltintas.github.io/git-harbour/sitemap.xml
