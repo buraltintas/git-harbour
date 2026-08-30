@@ -46,14 +46,26 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	var request struct {
+		PlayerStart string `json:"playerStart"`
+	}
+	if json.NewDecoder(r.Body).Decode(&request) != nil || request.PlayerStart == "" {
+		writeError(w, 400, "invalid_player_harbour", "Choose a ten-week contribution harbour.")
+		return
+	}
 	days, e := s.repo.Contributions(r.Context(), u.ID)
 	if e != nil {
 		writeError(w, 422, "contributions_missing", "Contribution history is unavailable.")
 		return
 	}
-	window, e := game.SelectTargetWindow(days, game.IdealMinTargets, game.IdealMaxTargets, game.SecureRand{})
+	player, e := game.TargetWindowAt(days, request.PlayerStart)
 	if e != nil {
-		writeError(w, 422, "history_not_playable", "No playable ten-week contribution window is available yet.")
+		writeError(w, 422, "invalid_player_harbour", "That ten-week contribution harbour is not playable.")
+		return
+	}
+	enemy, e := game.SelectFairOpponentWindow(days, player, game.SecureRand{})
+	if e != nil {
+		writeError(w, 422, "history_not_playable", "No different playable opponent period is available yet.")
 		return
 	}
 	stats, e := s.repo.Stats(r.Context(), u.ID, "solo")
@@ -61,7 +73,7 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "stats_failed", "Could not load stats.")
 		return
 	}
-	g := &State{ID: uuid(), Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", Board: window.Cells, Shots: []game.TargetShot{}, PeriodStart: window.Cells[0].Date, TargetCount: window.TargetCount, Stats: stats}
+	g := &State{ID: uuid(), Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", PlayerBoard: player.Cells, EnemyBoard: enemy.Cells, PlayerTargetShots: []game.TargetShot{}, AITargetShots: []game.TargetShot{}, PlayerStart: player.Cells[0].Date, EnemyStart: enemy.Cells[0].Date, PlayerTargetCount: player.TargetCount, EnemyTargetCount: enemy.TargetCount, Stats: stats}
 	if e = s.repo.CreateGame(r.Context(), u.ID, g); e != nil {
 		writeError(w, 500, "game_create_failed", "Could not create the game.")
 		return
@@ -76,7 +88,7 @@ func (s *Server) getGame(w http.ResponseWriter, r *http.Request) {
 	g, e := s.repo.Game(r.Context(), u.ID, r.PathValue("id"))
 	if e != nil {
 		if e == ErrLegacyGame {
-			writeError(w, 410, "legacy_game_retired", "This prototype fleet battle was retired by the contribution-target gameplay update.")
+			writeError(w, 410, "legacy_game_retired", "This earlier battle cannot continue under reciprocal contribution-target rules.")
 			return
 		}
 		if p, ok := s.repo.(PVPRepository); ok {

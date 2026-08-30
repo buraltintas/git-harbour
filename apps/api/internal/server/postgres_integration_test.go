@@ -39,8 +39,14 @@ func TestPostgresPersistenceAndConcurrentShot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	board := mockCells(time.Now())[:70]
-	g := &State{ID: uuid(), Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", Board: board, Shots: []game.TargetShot{}, PeriodStart: board[0].Date, TargetCount: game.TargetCount(board), Stats: decorate(PublicStats{Rating: 1200})}
+	days := mockCells(time.Now())
+	player, enemy := days[:70], days[70:140]
+	for i := range enemy {
+		enemy[i].ContributionCount, enemy[i].ContributionLevel = 0, 0
+	}
+	enemy[0].ContributionCount, enemy[0].ContributionLevel = 1, 1
+	enemy[69].ContributionCount, enemy[69].ContributionLevel = 2, 2
+	g := &State{ID: uuid(), Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", PlayerBoard: player, EnemyBoard: enemy, PlayerStart: player[0].Date, EnemyStart: enemy[0].Date, PlayerTargetCount: game.TargetCount(player), EnemyTargetCount: game.TargetCount(enemy), Stats: decorate(PublicStats{Rating: 1200})}
 	if err = repo.CreateGame(ctx, u.ID, g); err != nil {
 		t.Fatal(err)
 	}
@@ -52,6 +58,13 @@ func TestPostgresPersistenceAndConcurrentShot(t *testing.T) {
 	restored, err := NewPostgresRepository(otherPool).Game(ctx, u.ID, g.ID)
 	if err != nil || restored.ID != g.ID {
 		t.Fatal("game did not survive repository restart", err)
+	}
+	if _, events, err := NewPostgresRepository(otherPool).Shoot(ctx, u.ID, g.ID, game.Coord{X: 0, Y: 0}); err != nil || len(events) != 2 {
+		t.Fatal("reciprocal transition did not persist", events, err)
+	}
+	restored, err = NewPostgresRepository(otherPool).Game(ctx, u.ID, g.ID)
+	if err != nil || len(restored.PlayerBoard) != 70 || len(restored.EnemyBoard) != 70 || len(restored.AITargetShots) != 1 || restored.Turn != "player" {
+		t.Fatal("dual snapshots, AI shot, or current turn did not survive restart", restored, err)
 	}
 	results := make(chan error, 2)
 	for i := 0; i < 2; i++ {
@@ -68,6 +81,14 @@ func TestPostgresPersistenceAndConcurrentShot(t *testing.T) {
 	}
 	if success != 1 {
 		t.Fatalf("duplicate concurrent shot advanced %d times", success)
+	}
+	restored, err = NewPostgresRepository(otherPool).Game(ctx, u.ID, g.ID)
+	if err != nil || restored.Status != "complete" || restored.Winner != "player" || len(restored.AITargetShots) != 1 {
+		t.Fatal("terminal reciprocal state was not concurrency safe", restored, err)
+	}
+	stats, err := repo.Stats(ctx, u.ID, "solo")
+	if err != nil || stats.Games != 1 || stats.Wins != 1 || stats.Losses != 0 {
+		t.Fatal("terminal reciprocal stats were not applied once", stats, err)
 	}
 }
 

@@ -73,8 +73,84 @@ func TestFrozenWindowDoesNotFollowLiveHistory(t *testing.T) {
 	}
 }
 
-func TestSoloRatingIsDensityAwareAndBounded(t *testing.T) {
-	if SoloRatingDelta(20, 20) <= 0 || SoloRatingDelta(20, 70) < -12 || SoloRatingDelta(20, 20) > 12 {
-		t.Fatal(SoloRatingDelta(20, 20), SoloRatingDelta(20, 70))
+func TestPlayerWindowAndFairDifferentOpponent(t *testing.T) {
+	days := targetDays(24, 4)
+	player, err := TargetWindowAt(days, days[14].Date)
+	if err != nil || player.StartIndex != 14 || len(player.Cells) != BoardCells {
+		t.Fatal(player, err)
+	}
+	days[14].ContributionCount = 999
+	if player.Cells[0].ContributionCount == 999 {
+		t.Fatal("player snapshot was not frozen")
+	}
+	enemy, err := SelectFairOpponentWindow(days, player, fixed(0))
+	if err != nil || enemy.StartIndex == player.StartIndex || absTarget(enemy.TargetCount-player.TargetCount) > 5 || absTarget(enemy.StartIndex-player.StartIndex) < BoardCells {
+		t.Fatal(enemy, err)
+	}
+	if _, err = TargetWindowAt(days, "1900-01-01"); err == nil {
+		t.Fatal("invalid player period accepted")
+	}
+}
+
+func TestPlayerSelectionUsesBestAvailableQuality(t *testing.T) {
+	days := targetDays(30, 0)
+	days[0].ContributionCount, days[0].ContributionLevel = 1, 1
+	for i := 70; i < 80; i++ {
+		days[i].ContributionCount, days[i].ContributionLevel = 1, 1
+	}
+	if _, err := TargetWindowAt(days, days[0].Date); err == nil {
+		t.Fatal("one-target board accepted while an ideal board exists")
+	}
+	if window, err := TargetWindowAt(days, days[70].Date); err != nil || window.TargetCount != 10 {
+		t.Fatal(window, err)
+	}
+
+	sparse := targetDays(12, 0)
+	sparse[0].ContributionCount, sparse[0].ContributionLevel = 1, 1
+	if _, err := TargetWindowAt(sparse, sparse[0].Date); err != nil {
+		t.Fatal("closest sparse fallback should remain playable", err)
+	}
+}
+
+func TestFairOpponentFallsBackToClosestPlayableWindow(t *testing.T) {
+	days := targetDays(30, 0)
+	for i := 0; i < 10; i++ {
+		days[i].ContributionCount, days[i].ContributionLevel = 1, 1
+	}
+	for i := 70; i < 90; i++ {
+		days[i].ContributionCount, days[i].ContributionLevel = 1, 1
+	}
+	for i := 140; i < 185; i++ {
+		days[i].ContributionCount, days[i].ContributionLevel = 1, 1
+	}
+	player, _ := TargetWindowAt(days, days[0].Date)
+	enemy, err := SelectFairOpponentWindow(days, player, fixed(0))
+	if err != nil || enemy.StartIndex == player.StartIndex || enemy.TargetCount < 10 {
+		t.Fatal(enemy, err)
+	}
+}
+
+func TestNextTargetUsesOnlyPriorShotsAndNeverRepeats(t *testing.T) {
+	shots := []TargetShot{}
+	seen := map[Coord]bool{}
+	for i := 0; i < BoardCells; i++ {
+		coord, err := NextTarget(shots, fixed(0))
+		if err != nil || seen[coord] {
+			t.Fatal(coord, err)
+		}
+		seen[coord] = true
+		shots = append(shots, TargetShot{Coord: coord, Result: "miss"})
+	}
+	if _, err := NextTarget(shots, fixed(0)); err == nil {
+		t.Fatal("AI found a repeated coordinate after exhausting the board")
+	}
+}
+
+func TestResolveTargetShotRejectsCorruptPriorResults(t *testing.T) {
+	board := targetDays(10, 0)
+	board[0].ContributionCount, board[0].ContributionLevel = 3, 2
+	bad := []TargetShot{{Coord: Coord{X: 0, Y: 0}, Result: "miss"}}
+	if _, _, err := ResolveTargetShot(board, bad, Coord{X: 0, Y: 1}); err == nil {
+		t.Fatal("prior result inconsistent with frozen board was trusted")
 	}
 }

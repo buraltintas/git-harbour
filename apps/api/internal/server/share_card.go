@@ -48,17 +48,33 @@ func renderSoloShareCard(g *State, u User) (*image.RGBA, error) {
 	}
 	defer label.Close()
 	cardText(img, title, text, 100, 105, "GitHarbour")
-	cardText(img, label, accent, 100, 154, "HISTORY CLEARED")
-	cardText(img, hero, text, 100, 225, "@"+u.Login)
-	cardText(img, body, muted, 100, 274, g.PeriodStart+"  –  "+dateEnd(g.PeriodStart))
-	accuracy := 0.0
-	if len(g.Shots) > 0 {
-		accuracy = 100 * float64(g.TargetCount) / float64(len(g.Shots))
+	result, playerStart, enemyStart := "DEFEAT", g.PlayerStart, g.EnemyStart
+	shots, targets, board := g.PlayerTargetShots, g.EnemyTargetCount, g.EnemyBoard
+	if len(g.PlayerBoard) != 70 || len(g.EnemyBoard) != 70 {
+		result, playerStart, enemyStart = "ARCHIVED HISTORY HUNT", g.PeriodStart, ""
+		shots, targets, board = g.Shots, g.TargetCount, g.Board
+	} else if g.Winner == "player" {
+		result = "VICTORY"
 	}
-	cardText(img, body, text, 100, 335, fmt.Sprintf("%d contribution days  ·  %d shots  ·  %.0f%% accuracy", g.TargetCount, len(g.Shots), accuracy))
+	cardText(img, label, accent, 100, 154, result)
+	cardText(img, hero, text, 100, 225, "@"+u.Login)
+	periods := playerStart
+	if enemyStart != "" {
+		periods = fmt.Sprintf("%s–%s  vs  %s–%s", playerStart, dateEnd(playerStart), enemyStart, dateEnd(enemyStart))
+	}
+	cardText(img, body, muted, 100, 274, periods)
+	accuracy := 0.0
+	hits, _ := targetShotCounts(shots)
+	if len(shots) > 0 {
+		accuracy = 100 * float64(hits) / float64(len(shots))
+	}
+	if hits == 0 && targets > 0 {
+		hits = targets
+	}
+	cardText(img, body, text, 100, 335, fmt.Sprintf("%d targets  ·  %d shots  ·  %.0f%% accuracy  ·  %+.0d rating", hits, len(shots), accuracy, g.RatingDelta))
 	cardText(img, body, muted, 100, 535, "Your GitHub history is a battlefield.")
 	levels := []color.RGBA{{33, 38, 45, 255}, {14, 68, 41, 255}, {0, 109, 50, 255}, {38, 166, 65, 255}, {57, 211, 83, 255}}
-	for i, cell := range g.Board {
+	for i, cell := range board {
 		x, y := i/7, i%7
 		level := cell.ContributionLevel
 		if level < 0 || level >= len(levels) {

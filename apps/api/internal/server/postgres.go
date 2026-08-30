@@ -216,7 +216,7 @@ func (p *PostgresRepository) PublicUser(ctx context.Context, login string) (Publ
 }
 func (p *PostgresRepository) CreateGame(ctx context.Context, uid string, g *State) error {
 	b, _ := json.Marshal(g)
-	_, e := p.pool.Exec(ctx, `INSERT INTO games(id,mode,ruleset,status,current_turn,winner,player_id,player_start,enemy_start,state,terminal_applied) VALUES($1,'solo',$2,$3,$4,NULL,$5,$6,$6,$7,false)`, g.ID, g.Ruleset, g.Status, g.Turn, uid, g.PeriodStart, b)
+	_, e := p.pool.Exec(ctx, `INSERT INTO games(id,mode,ruleset,status,current_turn,winner,player_id,player_start,enemy_start,state,terminal_applied) VALUES($1,'solo',$2,$3,$4,NULL,$5,$6,$7,$8,false)`, g.ID, g.Ruleset, g.Status, g.Turn, uid, g.PlayerStart, g.EnemyStart, b)
 	return e
 }
 func (p *PostgresRepository) Game(ctx context.Context, uid, id string) (*State, error) {
@@ -235,9 +235,12 @@ func (p *PostgresRepository) Game(ctx context.Context, uid, id string) (*State, 
 	var g State
 	e = json.Unmarshal(b, &g)
 	g.Ruleset = ruleset
+	if e == nil && (len(g.PlayerBoard) != game.BoardCells || len(g.EnemyBoard) != game.BoardCells) {
+		return nil, ErrLegacyGame
+	}
 	return &g, e
 }
-func (p *PostgresRepository) Shoot(ctx context.Context, uid, id string, c game.Coord) (*State, []game.TargetShot, error) {
+func (p *PostgresRepository) Shoot(ctx context.Context, uid, id string, c game.Coord) (*State, []game.BattleEvent, error) {
 	tx, e := p.pool.Begin(ctx)
 	if e != nil {
 		return nil, nil, e
@@ -264,7 +267,7 @@ func (p *PostgresRepository) Shoot(ctx context.Context, uid, id string, c game.C
 	if e != nil {
 		return nil, nil, e
 	}
-	events, updated, e := resolveTargetTurn(&g, s, c)
+	events, updated, e := resolveTargetTurn(&g, s, c, game.SecureRand{})
 	if e != nil {
 		return nil, nil, e
 	}

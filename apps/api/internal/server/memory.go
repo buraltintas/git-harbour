@@ -201,12 +201,12 @@ func (m *MemoryRepository) Game(_ context.Context, uid, id string) (*State, erro
 	if g == nil {
 		return nil, ErrNotFound
 	}
-	if g.Ruleset != "contribution_targets_v2" {
+	if g.Ruleset != "contribution_targets_v2" || len(g.PlayerBoard) != game.BoardCells || len(g.EnemyBoard) != game.BoardCells {
 		return nil, ErrLegacyGame
 	}
 	return cloneState(g), nil
 }
-func (m *MemoryRepository) Shoot(_ context.Context, uid, id string, c game.Coord) (*State, []game.TargetShot, error) {
+func (m *MemoryRepository) Shoot(_ context.Context, uid, id string, c game.Coord) (*State, []game.BattleEvent, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.owners[id] != uid {
@@ -217,15 +217,17 @@ func (m *MemoryRepository) Shoot(_ context.Context, uid, id string, c game.Coord
 		return nil, nil, ErrNotFound
 	}
 	p := m.stats[uid]["solo"]
-	events, np, e := resolveTargetTurn(g, p, c)
+	next := cloneState(g)
+	events, np, e := resolveTargetTurn(next, p, c, game.SecureRand{})
 	if e != nil {
 		return nil, nil, e
 	}
+	m.games[id] = next
 	m.stats[uid]["solo"] = np
-	if g.ShareID != "" {
-		m.shares[g.ShareID] = id
+	if next.ShareID != "" {
+		m.shares[next.ShareID] = id
 	}
-	return cloneState(g), events, nil
+	return cloneState(next), events, nil
 }
 func (m *MemoryRepository) PublicShare(_ context.Context, sid string) (*State, User, error) {
 	m.mu.Lock()

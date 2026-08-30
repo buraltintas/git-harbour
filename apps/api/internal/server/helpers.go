@@ -93,20 +93,85 @@ func publicGame(g *State) map[string]any {
 }
 
 func publicTargetGame(g *State) map[string]any {
-	shotByCoord := map[string]game.TargetShot{}
-	hits, misses := 0, 0
-	for _, shot := range g.Shots {
-		shotByCoord[fmt.Sprintf("%d:%d", shot.X, shot.Y)] = shot
+	playerHits, playerMisses := targetShotCounts(g.PlayerTargetShots)
+	aiHits, aiMisses := targetShotCounts(g.AITargetShots)
+	playerCells := projectOwnBoard(g.PlayerBoard, g.AITargetShots)
+	enemyCells := projectEnemyBoard(g.EnemyBoard, g.PlayerTargetShots, g.Status == "complete")
+	accuracy := 0.0
+	if len(g.PlayerTargetShots) > 0 {
+		accuracy = 100 * float64(playerHits) / float64(len(g.PlayerTargetShots))
+	}
+	aiAccuracy := 0.0
+	if len(g.AITargetShots) > 0 {
+		aiAccuracy = 100 * float64(aiHits) / float64(len(g.AITargetShots))
+	}
+	out := map[string]any{
+		"id": g.ID, "mode": "solo", "ruleset": g.Ruleset,
+		"status": g.Status, "currentTurn": g.Turn, "winner": g.Winner,
+		"playerCells": playerCells, "enemyCells": enemyCells,
+		"playerTargetCount": g.PlayerTargetCount, "enemyTargetCount": g.EnemyTargetCount,
+		"playerTargetsHit": aiHits, "enemyTargetsHit": playerHits,
+		"shots": len(g.PlayerTargetShots), "misses": playerMisses,
+		"accuracy": accuracy, "aiShots": len(g.AITargetShots), "aiMisses": aiMisses, "aiAccuracy": aiAccuracy, "stats": g.Stats,
+		"playerPeriod": map[string]string{"start": g.PlayerStart, "end": dateEnd(g.PlayerStart)},
+	}
+	if g.Status == "complete" {
+		out["enemyPeriod"] = map[string]string{"start": g.EnemyStart, "end": dateEnd(g.EnemyStart)}
+		out["ratingDelta"] = g.RatingDelta
+		out["shareId"] = g.ShareID
+	}
+	return out
+}
+
+func targetShotCounts(shots []game.TargetShot) (hits, misses int) {
+	for _, shot := range shots {
 		if shot.Result == "hit" {
 			hits++
 		} else {
 			misses++
 		}
 	}
-	cells := make([]map[string]any, 0, game.BoardCells)
-	for i, cell := range g.Board {
+	return
+}
+
+func projectOwnBoard(board []game.Cell, shots []game.TargetShot) []map[string]any {
+	shotByCoord := map[string]game.TargetShot{}
+	for _, shot := range shots {
+		shotByCoord[fmt.Sprintf("%d:%d", shot.X, shot.Y)] = shot
+	}
+	out := make([]map[string]any, 0, len(board))
+	for i, cell := range board {
+		x, y := i/game.Height, i%game.Height
+		state := "empty"
+		if cell.ContributionCount > 0 {
+			state = "target"
+		}
+		if shot, ok := shotByCoord[fmt.Sprintf("%d:%d", x, y)]; ok {
+			state = shot.Result
+		}
+		out = append(out, map[string]any{"x": x, "y": y, "state": state, "date": cell.Date, "weekday": cell.Weekday, "contributionCount": cell.ContributionCount, "contributionLevel": cell.ContributionLevel})
+	}
+	return out
+}
+
+func projectEnemyBoard(board []game.Cell, shots []game.TargetShot, reveal bool) []map[string]any {
+	shotByCoord := map[string]game.TargetShot{}
+	for _, shot := range shots {
+		shotByCoord[fmt.Sprintf("%d:%d", shot.X, shot.Y)] = shot
+	}
+	out := make([]map[string]any, 0, len(board))
+	for i, cell := range board {
 		x, y := i/game.Height, i%game.Height
 		projected := map[string]any{"x": x, "y": y, "state": "unknown"}
+		if reveal {
+			projected["date"], projected["weekday"] = cell.Date, cell.Weekday
+			projected["contributionCount"], projected["contributionLevel"] = cell.ContributionCount, cell.ContributionLevel
+			if cell.ContributionCount == 0 {
+				projected["state"] = "empty"
+			} else {
+				projected["state"] = "target"
+			}
+		}
 		if shot, ok := shotByCoord[fmt.Sprintf("%d:%d", x, y)]; ok {
 			projected["state"] = shot.Result
 			if shot.Result == "hit" {
@@ -114,38 +179,7 @@ func publicTargetGame(g *State) map[string]any {
 				projected["contributionLevel"] = shot.ContributionLevel
 			}
 		}
-		if g.Status == "complete" {
-			projected["date"] = cell.Date
-			projected["weekday"] = cell.Weekday
-			projected["contributionCount"] = cell.ContributionCount
-			projected["contributionLevel"] = cell.ContributionLevel
-			if cell.ContributionCount == 0 {
-				projected["state"] = "empty"
-			} else {
-				projected["state"] = "hit"
-			}
-		}
-		cells = append(cells, projected)
-	}
-	accuracy := 0.0
-	if len(g.Shots) > 0 {
-		accuracy = 100 * float64(hits) / float64(len(g.Shots))
-	}
-	out := map[string]any{
-		"id": g.ID, "mode": "solo", "ruleset": g.Ruleset,
-		"status": g.Status, "cells": cells, "targetCount": g.TargetCount,
-		"foundCount": hits, "shots": len(g.Shots), "misses": misses,
-		"accuracy": accuracy, "stats": g.Stats,
-	}
-	if g.Status == "complete" {
-		total := 0
-		for _, cell := range g.Board {
-			total += cell.ContributionCount
-		}
-		out["period"] = map[string]string{"start": g.PeriodStart, "end": dateEnd(g.PeriodStart)}
-		out["totalContributions"] = total
-		out["ratingDelta"] = g.RatingDelta
-		out["shareId"] = g.ShareID
+		out = append(out, projected)
 	}
 	return out
 }
@@ -186,42 +220,59 @@ func finishState(g *State, p PublicStats, winner string) (PublicStats, string) {
 	g.ShareID = randomSecret(9)
 	return p, g.ShareID
 }
-func finishTargetState(g *State, p PublicStats) PublicStats {
+func finishTargetState(g *State, p PublicStats, winner string) PublicStats {
 	if g.TerminalApplied {
 		return p
 	}
-	g.Status, g.Turn, g.Winner, g.TerminalApplied = "complete", "complete", "cleared", true
+	g.Status, g.Turn, g.Winner, g.TerminalApplied = "complete", "complete", winner, true
 	old := p.Rating
-	p.Games++
-	p.Wins++ // In Solo v2, a win is a completed history hunt.
-	p.Shots += len(g.Shots)
-	p.Hits += g.TargetCount
-	p.CurrentStreak++
-	if p.CurrentStreak > p.LongestStreak {
-		p.LongestStreak = p.CurrentStreak
-	}
-	p.WinShots += len(g.Shots)
-	p.Rating += game.SoloRatingDelta(g.TargetCount, len(g.Shots))
-	p = decorate(p)
+	hits, _ := targetShotCounts(g.PlayerTargetShots)
+	stats := game.Stats{Games: p.Games, Wins: p.Wins, Losses: p.Losses, Rating: p.Rating, Shots: p.Shots, Hits: p.Hits, CurrentStreak: p.CurrentStreak, LongestStreak: p.LongestStreak, WinShots: p.WinShots}
+	stats = game.UpdateStatsAgainst(stats, 1200, winner == "player", len(g.PlayerTargetShots), hits)
+	p = decorate(PublicStats{Games: stats.Games, Wins: stats.Wins, Losses: stats.Losses, Rating: stats.Rating, Shots: stats.Shots, Hits: stats.Hits, CurrentStreak: stats.CurrentStreak, LongestStreak: stats.LongestStreak, WinShots: stats.WinShots})
 	g.Stats, g.RatingDelta, g.ShareID = p, p.Rating-old, randomSecret(9)
 	return p
 }
-func resolveTargetTurn(g *State, p PublicStats, c game.Coord) ([]game.TargetShot, PublicStats, error) {
+func resolveTargetTurn(g *State, p PublicStats, c game.Coord, r game.Rander) ([]game.BattleEvent, PublicStats, error) {
 	if g.Ruleset != "contribution_targets_v2" {
+		return nil, p, ErrLegacyGame
+	}
+	if len(g.PlayerBoard) != game.BoardCells || len(g.EnemyBoard) != game.BoardCells {
 		return nil, p, ErrLegacyGame
 	}
 	if g.Status == "complete" {
 		return nil, p, ErrGameComplete
 	}
-	shot, complete, err := game.ResolveTargetShot(g.Board, g.Shots, c)
+	if g.Turn != "player" {
+		return nil, p, ErrNotYourTurn
+	}
+	shot, complete, err := game.ResolveTargetShot(g.EnemyBoard, g.PlayerTargetShots, c)
 	if err != nil {
 		return nil, p, err
 	}
-	g.Shots = append(g.Shots, shot)
+	g.PlayerTargetShots = append(g.PlayerTargetShots, shot)
+	events := []game.BattleEvent{{Actor: "player", TargetShot: shot}}
 	if complete {
-		p = finishTargetState(g, p)
+		p = finishTargetState(g, p, "player")
+		return events, p, nil
 	}
-	return []game.TargetShot{shot}, p, nil
+	g.Turn = "ai"
+	target, err := game.NextTarget(g.AITargetShots, r)
+	if err != nil {
+		return nil, p, err
+	}
+	aiShot, aiComplete, err := game.ResolveTargetShot(g.PlayerBoard, g.AITargetShots, target)
+	if err != nil {
+		return nil, p, err
+	}
+	g.AITargetShots = append(g.AITargetShots, aiShot)
+	events = append(events, game.BattleEvent{Actor: "ai", TargetShot: aiShot})
+	if aiComplete {
+		p = finishTargetState(g, p, "ai")
+	} else {
+		g.Turn = "player"
+	}
+	return events, p, nil
 }
 func resolveTurn(g *State, p PublicStats, c game.Coord) ([]game.Shot, PublicStats, error) {
 	if g.Status == "complete" {

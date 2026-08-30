@@ -44,6 +44,26 @@ func authed(method, path, token, body string) *http.Request {
 	return r
 }
 
+type fixedRand int
+
+func (f fixedRand) Intn(n int) (int, error) { return int(f) % n, nil }
+
+func reciprocalState(playerTargets, enemyTargets []int) *State {
+	start := time.Date(2025, 1, 5, 0, 0, 0, 0, time.UTC)
+	makeBoard := func(targets []int) []game.Cell {
+		board := make([]game.Cell, game.BoardCells)
+		for i := range board {
+			board[i] = game.Cell{Date: start.AddDate(0, 0, i).Format("2006-01-02"), Weekday: i % 7}
+		}
+		for _, i := range targets {
+			board[i].ContributionCount, board[i].ContributionLevel = i+1, 1
+		}
+		return board
+	}
+	player, enemy := makeBoard(playerTargets), makeBoard(enemyTargets)
+	return &State{ID: "reciprocal", Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", PlayerBoard: player, EnemyBoard: enemy, PlayerStart: player[0].Date, EnemyStart: enemy[0].Date, PlayerTargetCount: game.TargetCount(player), EnemyTargetCount: game.TargetCount(enemy), Stats: decorate(PublicStats{Rating: 1200})}
+}
+
 func TestOAuthStateSecureSingleUseAndExpiry(t *testing.T) {
 	s, repo := testServer(t)
 	a := httptest.NewRecorder()
@@ -165,7 +185,7 @@ func TestAuthorizationBetweenUsers(t *testing.T) {
 	a, _ := repo.UpsertGitHubUser(context.Background(), User{GitHubID: 10, Login: "a"}, mockCells(s.now()))
 	b, _ := repo.UpsertGitHubUser(context.Background(), User{GitHubID: 11, Login: "b"}, mockCells(s.now()))
 	board := mockCells(s.now())[:70]
-	g := &State{ID: uuid(), Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", Board: board, PeriodStart: board[0].Date, TargetCount: game.TargetCount(board)}
+	g := &State{ID: uuid(), Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", PlayerBoard: board, EnemyBoard: append([]game.Cell(nil), board...), PlayerStart: board[0].Date, EnemyStart: board[0].Date, PlayerTargetCount: game.TargetCount(board), EnemyTargetCount: game.TargetCount(board)}
 	_ = repo.CreateGame(context.Background(), a.ID, g)
 	if _, err := repo.Game(context.Background(), b.ID, g.ID); err != ErrNotFound {
 		t.Fatal("user B read user A game")
@@ -180,80 +200,156 @@ func TestAuthorizationBetweenUsers(t *testing.T) {
 	}
 }
 func TestPublicGameHidesPersistedEnemyState(t *testing.T) {
-	board := mockCells(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))[:70]
-	g := &State{ID: "game", Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", Board: board, PeriodStart: board[0].Date, TargetCount: game.TargetCount(board)}
+	all := mockCells(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	player, enemy := all[:70], all[70:140]
+	g := &State{ID: "game", Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", PlayerBoard: player, EnemyBoard: enemy, PlayerStart: player[0].Date, EnemyStart: enemy[0].Date, PlayerTargetCount: game.TargetCount(player), EnemyTargetCount: game.TargetCount(enemy)}
 	b, _ := json.Marshal(g)
-	if !strings.Contains(string(b), board[0].Date) || !strings.Contains(string(b), "contributionCount") {
+	if !strings.Contains(string(b), enemy[0].Date) || !strings.Contains(string(b), "contributionCount") {
 		t.Fatal("stored state lost the frozen contribution snapshot")
 	}
-	public, _ := json.Marshal(publicGame(g))
-	if strings.Contains(string(public), "date") || strings.Contains(string(public), "contributionCount") || strings.Contains(string(public), "contributionLevel") || strings.Contains(string(public), "periodStart") {
+	projection := publicGame(g)
+	public, _ := json.Marshal(projection)
+	if strings.Contains(string(public), enemy[0].Date) || strings.Contains(string(public), `"enemyPeriod"`) {
 		t.Fatal("public projection exposed hidden state")
 	}
+	for _, cell := range projection["enemyCells"].([]map[string]any) {
+		if cell["state"] == "unknown" && len(cell) != 3 {
+			t.Fatal("unknown enemy cell leaked hidden fields", cell)
+		}
+	}
+	if first := projection["playerCells"].([]map[string]any)[0]; first["date"] == nil || first["contributionCount"] == nil {
+		t.Fatal("owner could not see selected player harbour", first)
+	}
 	target := game.Coord{}
-	for i, cell := range board {
+	for i, cell := range enemy {
 		if cell.ContributionCount > 0 {
 			target = game.Coord{X: i / 7, Y: i % 7}
 			break
 		}
 	}
-	shot, _, _ := game.ResolveTargetShot(board, nil, target)
-	g.Shots = []game.TargetShot{shot}
-	public, _ = json.Marshal(publicGame(g))
-	if !strings.Contains(string(public), "contributionCount") || strings.Contains(string(public), board[0].Date) {
+	shot, _, _ := game.ResolveTargetShot(enemy, nil, target)
+	g.PlayerTargetShots = []game.TargetShot{shot}
+	projection = publicGame(g)
+	public, _ = json.Marshal(projection)
+	if !strings.Contains(string(public), "contributionCount") || strings.Contains(string(public), enemy[0].Date) {
 		t.Fatal("hit reveal should expose its intensity but not dates", string(public))
+	}
+	revealed := projection["enemyCells"].([]map[string]any)[target.X*game.Height+target.Y]
+	if revealed["date"] != nil || revealed["weekday"] != nil || revealed["contributionCount"] == nil || revealed["contributionLevel"] == nil {
+		t.Fatal("active hit projection has unsafe or missing fields", revealed)
 	}
 }
 
 func TestSoloContributionTargetFlowAndStatsOnce(t *testing.T) {
 	s, repo := testServer(t)
 	token := devToken(t, s)
+	days, _ := repo.Contributions(context.Background(), repo.sessions[hashKey(digest(token))].UserID)
 	created := httptest.NewRecorder()
-	s.Handler().ServeHTTP(created, authed("POST", "/v1/games/solo", token, `{}`))
+	s.Handler().ServeHTTP(created, authed("POST", "/v1/games/solo", token, fmt.Sprintf(`{"playerStart":%q}`, days[0].Date)))
 	if created.Code != 201 {
 		t.Fatal(created.Code, created.Body.String())
 	}
 	var response struct {
-		ID          string `json:"id"`
-		TargetCount int    `json:"targetCount"`
+		ID               string `json:"id"`
+		EnemyTargetCount int    `json:"enemyTargetCount"`
 	}
 	_ = json.Unmarshal(created.Body.Bytes(), &response)
-	if response.ID == "" || response.TargetCount == 0 || strings.Contains(created.Body.String(), "date") || strings.Contains(created.Body.String(), "contributionCount") {
+	if response.ID == "" || response.EnemyTargetCount == 0 || !strings.Contains(created.Body.String(), `"playerCells"`) || strings.Contains(created.Body.String(), `"enemyPeriod"`) {
 		t.Fatal("active game leaked hidden board", created.Body.String())
 	}
 	repo.mu.Lock()
 	frozen := cloneState(repo.games[response.ID])
 	repo.mu.Unlock()
-	if len(frozen.Board) != 70 {
-		t.Fatal("frozen board must contain exactly 70 cells")
+	if len(frozen.PlayerBoard) != 70 || len(frozen.EnemyBoard) != 70 || frozen.PlayerStart == frozen.EnemyStart {
+		t.Fatal("game must freeze two different 70-cell boards")
 	}
-	var finalBody string
-	for i, cell := range frozen.Board {
-		if cell.ContributionCount == 0 {
-			continue
+	if len(frozen.AITargetShots) != 0 || frozen.Turn != "player" {
+		t.Fatal("new game did not start on the player turn")
+	}
+}
+
+func TestReciprocalTurnVictoryAndDefeat(t *testing.T) {
+	p := decorate(PublicStats{Rating: 1200})
+	g := reciprocalState([]int{69}, []int{0, 1})
+	events, updated, err := resolveTargetTurn(g, p, game.Coord{X: 0, Y: 0}, fixedRand(0))
+	if err != nil || len(events) != 2 || events[0].Actor != "player" || events[1].Actor != "ai" || g.Turn != "player" || len(g.AITargetShots) != 1 {
+		t.Fatal(events, updated, g.Turn, err)
+	}
+	if _, _, err = resolveTargetTurn(g, p, game.Coord{X: 0, Y: 0}, fixedRand(0)); err == nil {
+		t.Fatal("duplicate player shot accepted")
+	}
+	events, updated, err = resolveTargetTurn(g, p, game.Coord{X: 0, Y: 1}, fixedRand(0))
+	if err != nil || len(events) != 1 || g.Winner != "player" || updated.Wins != 1 || updated.Losses != 0 || updated.Rating <= 1200 {
+		t.Fatal(events, updated, g.Winner, err)
+	}
+	if _, again, err := resolveTargetTurn(g, updated, game.Coord{X: 1, Y: 1}, fixedRand(0)); err != ErrGameComplete || again.Games != 1 {
+		t.Fatal("terminal state was not stable", again, err)
+	}
+
+	loss := reciprocalState([]int{0}, []int{69})
+	loser := decorate(PublicStats{Rating: 1200, CurrentStreak: 3, LongestStreak: 3})
+	events, loser, err = resolveTargetTurn(loss, loser, game.Coord{X: 0, Y: 0}, fixedRand(0))
+	if err != nil || len(events) != 2 || loss.Winner != "ai" || loser.Wins != 0 || loser.Losses != 1 || loser.CurrentStreak != 0 || loser.Rating >= 1200 || loser.Shots != 1 || loser.Hits != 0 {
+		t.Fatal(events, loser, loss.Winner, err)
+	}
+}
+
+func TestMemoryTurnIsAtomicWhenAISelectionFails(t *testing.T) {
+	repo := NewMemoryRepository()
+	u, _ := repo.UpsertGitHubUser(context.Background(), User{GitHubID: 88, Login: "atomic"}, mockCells(time.Now()))
+	g := reciprocalState([]int{69}, []int{0, 1})
+	g.ID = uuid()
+	for x := 0; x < game.Width; x++ {
+		for y := 0; y < game.Height; y++ {
+			cell := g.PlayerBoard[x*game.Height+y]
+			shot := game.TargetShot{Coord: game.Coord{X: x, Y: y}, Result: "miss"}
+			if cell.ContributionCount > 0 {
+				shot.Result, shot.ContributionCount, shot.ContributionLevel = "hit", cell.ContributionCount, cell.ContributionLevel
+			}
+			g.AITargetShots = append(g.AITargetShots, shot)
 		}
-		shot := httptest.NewRecorder()
-		body := fmt.Sprintf(`{"x":%d,"y":%d}`, i/7, i%7)
-		s.Handler().ServeHTTP(shot, authed("POST", "/v1/games/"+response.ID+"/shots", token, body))
-		if shot.Code != 200 {
-			t.Fatal(shot.Code, shot.Body.String())
-		}
-		finalBody = shot.Body.String()
 	}
-	if !strings.Contains(finalBody, `"status":"complete"`) || !strings.Contains(finalBody, `"period"`) || !strings.Contains(finalBody, frozen.Board[0].Date) {
-		t.Fatal("completed game did not reveal the frozen period", finalBody)
+	_ = repo.CreateGame(context.Background(), u.ID, g)
+	if _, _, err := repo.Shoot(context.Background(), u.ID, g.ID, game.Coord{X: 0, Y: 0}); err == nil {
+		t.Fatal("expected exhausted AI target error")
 	}
-	if strings.Contains(finalBody, `"misses":1`) {
-		t.Fatal("empty cells should not be required for completion")
+	repo.mu.Lock()
+	stored := cloneState(repo.games[g.ID])
+	repo.mu.Unlock()
+	if len(stored.PlayerTargetShots) != 0 || stored.Turn != "player" {
+		t.Fatal("failed transition partially mutated memory state", stored.PlayerTargetShots, stored.Turn)
 	}
-	stats, _ := repo.Stats(context.Background(), repo.owners[response.ID], "solo")
-	if stats.Games != 1 || stats.Wins != 1 || stats.Hits != response.TargetCount {
-		t.Fatal("terminal stats were not applied exactly once", stats)
+}
+
+func TestTerminalProjectionRevealsEnemyPeriod(t *testing.T) {
+	g := reciprocalState([]int{0}, []int{69})
+	g.Status, g.Turn, g.Winner = "complete", "complete", "ai"
+	public, _ := json.Marshal(publicGame(g))
+	if !strings.Contains(string(public), `"enemyPeriod"`) || !strings.Contains(string(public), g.EnemyStart) || !strings.Contains(string(public), `"date"`) {
+		t.Fatal(string(public))
 	}
-	more := httptest.NewRecorder()
-	s.Handler().ServeHTTP(more, authed("POST", "/v1/games/"+response.ID+"/shots", token, `{"x":9,"y":6}`))
-	if more.Code != 409 || !strings.Contains(more.Body.String(), "game_complete") {
-		t.Fatal("completed game accepted another shot", more.Code, more.Body.String())
+	if !strings.Contains(string(public), `"state":"target"`) {
+		t.Fatal("unhit enemy targets should be revealed without being mislabeled as player hits", string(public))
+	}
+}
+
+func TestReciprocalSoloShareUsesResultAndBothPeriods(t *testing.T) {
+	s, repo := testServer(t)
+	u, _ := repo.UpsertGitHubUser(context.Background(), User{GitHubID: 71, Login: "alice"}, mockCells(s.now()))
+	g := reciprocalState([]int{0}, []int{69})
+	g.ID, g.Status, g.Turn, g.Winner, g.ShareID, g.RatingDelta = uuid(), "complete", "complete", "player", "share-one", 16
+	g.PlayerTargetShots = []game.TargetShot{{Coord: game.Coord{X: 9, Y: 6}, Result: "hit", ContributionCount: 70, ContributionLevel: 1}}
+	_ = repo.CreateGame(context.Background(), u.ID, g)
+	repo.shares[g.ShareID] = g.ID
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/s/share-one", nil)
+	r.SetPathValue("id", "share-one")
+	s.shareHTML(w, r)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "Victory") || !strings.Contains(w.Body.String(), g.PlayerStart) || !strings.Contains(w.Body.String(), g.EnemyStart) {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if img, err := renderSoloShareCard(g, u); err != nil || img.Bounds().Dx() != 1200 {
+		t.Fatal("reciprocal share card failed", err)
 	}
 }
 func TestPublicProfileWidgetAndEscaping(t *testing.T) {
