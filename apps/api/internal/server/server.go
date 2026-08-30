@@ -55,11 +55,13 @@ func NewWithConfig(ctx context.Context, cfg Config, repo Repository, gh GitHubCl
 	if gh == nil {
 		gh = NewHTTPGitHubClient(cfg)
 	}
-	return &Server{cfg: cfg, repo: repo, github: gh, now: func() time.Time { return time.Now().UTC() }, limits: newRequestLimiter(60, time.Minute)}, nil
+	// A Solo board can legitimately require all 70 cells. Keep enough room for
+	// setup/retries while preserving a conservative per-session abuse ceiling.
+	return &Server{cfg: cfg, repo: repo, github: gh, now: func() time.Time { return time.Now().UTC() }, limits: newRequestLimiter(120, time.Minute)}, nil
 }
 func checkSchema(ctx context.Context, p *pgxpool.Pool) error {
 	var ok bool
-	e := p.QueryRow(ctx, `SELECT to_regclass('public.auth_sessions') IS NOT NULL AND to_regclass('public.games') IS NOT NULL AND to_regclass('public.pvp_shots') IS NOT NULL AND to_regclass('public.pvp_results') IS NOT NULL`).Scan(&ok)
+	e := p.QueryRow(ctx, `SELECT to_regclass('public.auth_sessions') IS NOT NULL AND to_regclass('public.games') IS NOT NULL AND to_regclass('public.pvp_shots') IS NOT NULL AND to_regclass('public.pvp_results') IS NOT NULL AND EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='games' AND column_name='ruleset')`).Scan(&ok)
 	if e != nil {
 		return e
 	}

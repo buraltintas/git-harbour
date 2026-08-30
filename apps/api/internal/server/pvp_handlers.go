@@ -1,14 +1,13 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
-	"time"
-
-	"github.com/githarbour/githarbour/apps/api/internal/game"
 )
+
+func pvpRefit(w http.ResponseWriter) {
+	writeError(w, http.StatusServiceUnavailable, "pvp_refit", "Developer vs Developer is being updated to contribution-target harbours.")
+}
 
 func (s *Server) pvpRepo(w http.ResponseWriter) (PVPRepository, bool) {
 	p, ok := s.repo.(PVPRepository)
@@ -99,30 +98,16 @@ func (s *Server) publicChallenge(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, challengeDTO(c, current))
 }
 func (s *Server) createChallenge(w http.ResponseWriter, r *http.Request) {
-	u, ok := s.needUser(w, r)
+	_, ok := s.needUser(w, r)
 	if !ok {
 		return
 	}
-	p, ok := s.pvpRepo(w)
-	if !ok {
-		return
-	}
-	var c Challenge
-	var e error
-	for i := 0; i < 4; i++ {
-		c, e = p.CreateChallenge(r.Context(), u.ID, randomSecret(12), s.now().Add(7*24*time.Hour))
-		if e == nil {
-			break
-		}
-	}
-	if e != nil {
-		writeError(w, 500, "challenge_create_failed", "Could not create challenge.")
-		return
-	}
-	writeJSON(w, 201, map[string]any{"challenge": challengeDTO(c, &u), "challengeUrl": strings.TrimSuffix(s.cfg.WebAppURL, "/") + "/challenge/" + c.Code})
+	pvpRefit(w)
 }
 func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request) {
-	s.challengeAction(w, r, "accept")
+	if _, ok := s.needUser(w, r); ok {
+		pvpRefit(w)
+	}
 }
 func (s *Server) cancelChallenge(w http.ResponseWriter, r *http.Request) {
 	s.challengeAction(w, r, "cancel")
@@ -163,46 +148,11 @@ func (s *Server) challengeAction(w http.ResponseWriter, r *http.Request, action 
 	writeJSON(w, 200, d)
 }
 func (s *Server) readyChallenge(w http.ResponseWriter, r *http.Request) {
-	u, ok := s.needUser(w, r)
+	_, ok := s.needUser(w, r)
 	if !ok {
 		return
 	}
-	p, ok := s.pvpRepo(w)
-	if !ok {
-		return
-	}
-	var q createReq
-	if json.NewDecoder(r.Body).Decode(&q) != nil || game.ValidateFleet(q.Fleet) != nil {
-		writeError(w, 422, "invalid_fleet", "Place every ship in bounds without overlap.")
-		return
-	}
-	days, e := s.repo.Contributions(r.Context(), u.ID)
-	if e != nil {
-		writeError(w, 422, "invalid_period", "Contribution history is unavailable.")
-		return
-	}
-	idx := -1
-	for i := range days {
-		if days[i].Date == q.StartDate {
-			idx = i
-			break
-		}
-	}
-	if idx < 0 || idx%7 != 0 || idx+70 > len(days) {
-		writeError(w, 422, "invalid_period", "Choose a complete 10-week range.")
-		return
-	}
-	board := append([]game.Cell(nil), days[idx:idx+70]...)
-	c, g, e := p.ReadyChallenge(r.Context(), u.ID, r.PathValue("code"), q.StartDate, board, q.Fleet, s.now())
-	if e != nil {
-		writePVPError(w, e)
-		return
-	}
-	d := map[string]any{"challenge": challengeDTO(c, &u)}
-	if g != nil {
-		d["game"] = pvpDTO(g)
-	}
-	writeJSON(w, 200, d)
+	pvpRefit(w)
 }
 func (s *Server) battles(w http.ResponseWriter, r *http.Request) {
 	u, ok := s.needUser(w, r)
@@ -240,20 +190,11 @@ func (s *Server) battles(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"yourTurn": your, "waiting": wait, "finished": done})
 }
 func (s *Server) rematch(w http.ResponseWriter, r *http.Request) {
-	u, ok := s.needUser(w, r)
+	_, ok := s.needUser(w, r)
 	if !ok {
 		return
 	}
-	p, ok := s.pvpRepo(w)
-	if !ok {
-		return
-	}
-	c, e := p.Rematch(r.Context(), u.ID, r.PathValue("id"), s.now().Add(7*24*time.Hour))
-	if e != nil {
-		writePVPError(w, e)
-		return
-	}
-	writeJSON(w, 201, map[string]any{"challenge": challengeDTO(c, &u), "challengeUrl": strings.TrimSuffix(s.cfg.WebAppURL, "/") + "/challenge/" + c.Code})
+	pvpRefit(w)
 }
 func (s *Server) leaderboard(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.pvpRepo(w)

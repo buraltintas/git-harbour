@@ -210,45 +210,55 @@ func (p *PostgresRepository) PublicUser(ctx context.Context, login string) (Publ
 }
 func (p *PostgresRepository) CreateGame(ctx context.Context, uid string, g *State) error {
 	b, _ := json.Marshal(g)
-	_, e := p.pool.Exec(ctx, `INSERT INTO games(id,mode,status,current_turn,winner,player_id,player_start,enemy_start,state,terminal_applied) VALUES($1,'solo',$2,$3,NULL,$4,$5,$6,$7,false)`, g.ID, g.Status, g.Turn, uid, g.PlayerStart, g.EnemyStart, b)
+	_, e := p.pool.Exec(ctx, `INSERT INTO games(id,mode,ruleset,status,current_turn,winner,player_id,player_start,enemy_start,state,terminal_applied) VALUES($1,'solo',$2,$3,$4,NULL,$5,$6,$6,$7,false)`, g.ID, g.Ruleset, g.Status, g.Turn, uid, g.PeriodStart, b)
 	return e
 }
 func (p *PostgresRepository) Game(ctx context.Context, uid, id string) (*State, error) {
 	var b []byte
-	e := p.pool.QueryRow(ctx, `SELECT state FROM games WHERE id=$1 AND player_id=$2 AND mode='solo'`, id, uid).Scan(&b)
+	var ruleset string
+	e := p.pool.QueryRow(ctx, `SELECT ruleset,state FROM games WHERE id=$1 AND player_id=$2 AND mode='solo'`, id, uid).Scan(&ruleset, &b)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if e != nil {
 		return nil, e
 	}
+	if ruleset != "contribution_targets_v2" {
+		return nil, ErrLegacyGame
+	}
 	var g State
 	e = json.Unmarshal(b, &g)
+	g.Ruleset = ruleset
 	return &g, e
 }
-func (p *PostgresRepository) Shoot(ctx context.Context, uid, id string, c game.Coord) (*State, []game.Shot, error) {
+func (p *PostgresRepository) Shoot(ctx context.Context, uid, id string, c game.Coord) (*State, []game.TargetShot, error) {
 	tx, e := p.pool.Begin(ctx)
 	if e != nil {
 		return nil, nil, e
 	}
 	defer tx.Rollback(ctx)
 	var b []byte
-	e = tx.QueryRow(ctx, `SELECT state FROM games WHERE id=$1 AND player_id=$2 AND mode='solo' FOR UPDATE`, id, uid).Scan(&b)
+	var ruleset string
+	e = tx.QueryRow(ctx, `SELECT ruleset,state FROM games WHERE id=$1 AND player_id=$2 AND mode='solo' FOR UPDATE`, id, uid).Scan(&ruleset, &b)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return nil, nil, ErrNotFound
 	}
 	if e != nil {
 		return nil, nil, e
 	}
+	if ruleset != "contribution_targets_v2" {
+		return nil, nil, ErrLegacyGame
+	}
 	var g State
 	if e = json.Unmarshal(b, &g); e != nil {
 		return nil, nil, e
 	}
+	g.Ruleset = ruleset
 	s, e := scanStats(tx.QueryRow(ctx, `SELECT games,wins,losses,rating,shots,hits,current_streak,longest_streak,win_shots FROM mode_stats WHERE user_id=$1 AND mode='solo' FOR UPDATE`, uid))
 	if e != nil {
 		return nil, nil, e
 	}
-	events, updated, e := resolveTurn(&g, s, c)
+	events, updated, e := resolveTargetTurn(&g, s, c)
 	if e != nil {
 		return nil, nil, e
 	}

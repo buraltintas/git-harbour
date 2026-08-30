@@ -201,9 +201,12 @@ func (m *MemoryRepository) Game(_ context.Context, uid, id string) (*State, erro
 	if g == nil {
 		return nil, ErrNotFound
 	}
+	if g.Ruleset != "contribution_targets_v2" {
+		return nil, ErrLegacyGame
+	}
 	return cloneState(g), nil
 }
-func (m *MemoryRepository) Shoot(_ context.Context, uid, id string, c game.Coord) (*State, []game.Shot, error) {
+func (m *MemoryRepository) Shoot(_ context.Context, uid, id string, c game.Coord) (*State, []game.TargetShot, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.owners[id] != uid {
@@ -214,7 +217,7 @@ func (m *MemoryRepository) Shoot(_ context.Context, uid, id string, c game.Coord
 		return nil, nil, ErrNotFound
 	}
 	p := m.stats[uid]["solo"]
-	events, np, e := resolveTurn(g, p, c)
+	events, np, e := resolveTargetTurn(g, p, c)
 	if e != nil {
 		return nil, nil, e
 	}

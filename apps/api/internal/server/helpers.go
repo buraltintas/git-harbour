@@ -23,6 +23,7 @@ var ErrSelfChallenge = errors.New("self challenge")
 var ErrNotYourTurn = errors.New("not your turn")
 var ErrSetupLocked = errors.New("setup locked")
 var ErrGameComplete = errors.New("game complete")
+var ErrLegacyGame = errors.New("legacy game retired")
 
 func randomSecret(n int) string {
 	b := make([]byte, n)
@@ -77,6 +78,9 @@ func decorate(p PublicStats) PublicStats {
 	return p
 }
 func publicGame(g *State) map[string]any {
+	if g.Ruleset == "contribution_targets_v2" {
+		return publicTargetGame(g)
+	}
 	b, _ := json.Marshal(g)
 	var m map[string]any
 	_ = json.Unmarshal(b, &m)
@@ -86,6 +90,64 @@ func publicGame(g *State) map[string]any {
 		m["enemyPeriod"] = map[string]string{"start": g.EnemyStart, "end": dateEnd(g.EnemyStart)}
 	}
 	return m
+}
+
+func publicTargetGame(g *State) map[string]any {
+	shotByCoord := map[string]game.TargetShot{}
+	hits, misses := 0, 0
+	for _, shot := range g.Shots {
+		shotByCoord[fmt.Sprintf("%d:%d", shot.X, shot.Y)] = shot
+		if shot.Result == "hit" {
+			hits++
+		} else {
+			misses++
+		}
+	}
+	cells := make([]map[string]any, 0, game.BoardCells)
+	for i, cell := range g.Board {
+		x, y := i/game.Height, i%game.Height
+		projected := map[string]any{"x": x, "y": y, "state": "unknown"}
+		if shot, ok := shotByCoord[fmt.Sprintf("%d:%d", x, y)]; ok {
+			projected["state"] = shot.Result
+			if shot.Result == "hit" {
+				projected["contributionCount"] = shot.ContributionCount
+				projected["contributionLevel"] = shot.ContributionLevel
+			}
+		}
+		if g.Status == "complete" {
+			projected["date"] = cell.Date
+			projected["weekday"] = cell.Weekday
+			projected["contributionCount"] = cell.ContributionCount
+			projected["contributionLevel"] = cell.ContributionLevel
+			if cell.ContributionCount == 0 {
+				projected["state"] = "empty"
+			} else {
+				projected["state"] = "hit"
+			}
+		}
+		cells = append(cells, projected)
+	}
+	accuracy := 0.0
+	if len(g.Shots) > 0 {
+		accuracy = 100 * float64(hits) / float64(len(g.Shots))
+	}
+	out := map[string]any{
+		"id": g.ID, "mode": "solo", "ruleset": g.Ruleset,
+		"status": g.Status, "cells": cells, "targetCount": g.TargetCount,
+		"foundCount": hits, "shots": len(g.Shots), "misses": misses,
+		"accuracy": accuracy, "stats": g.Stats,
+	}
+	if g.Status == "complete" {
+		total := 0
+		for _, cell := range g.Board {
+			total += cell.ContributionCount
+		}
+		out["period"] = map[string]string{"start": g.PeriodStart, "end": dateEnd(g.PeriodStart)}
+		out["totalContributions"] = total
+		out["ratingDelta"] = g.RatingDelta
+		out["shareId"] = g.ShareID
+	}
+	return out
 }
 func dateEnd(v string) string {
 	d, _ := time.Parse("2006-01-02", v)
@@ -123,6 +185,43 @@ func finishState(g *State, p PublicStats, winner string) (PublicStats, string) {
 	g.RatingDelta = p.Rating - old
 	g.ShareID = randomSecret(9)
 	return p, g.ShareID
+}
+func finishTargetState(g *State, p PublicStats) PublicStats {
+	if g.TerminalApplied {
+		return p
+	}
+	g.Status, g.Turn, g.Winner, g.TerminalApplied = "complete", "complete", "cleared", true
+	old := p.Rating
+	p.Games++
+	p.Wins++ // In Solo v2, a win is a completed history hunt.
+	p.Shots += len(g.Shots)
+	p.Hits += g.TargetCount
+	p.CurrentStreak++
+	if p.CurrentStreak > p.LongestStreak {
+		p.LongestStreak = p.CurrentStreak
+	}
+	p.WinShots += len(g.Shots)
+	p.Rating += game.SoloRatingDelta(g.TargetCount, len(g.Shots))
+	p = decorate(p)
+	g.Stats, g.RatingDelta, g.ShareID = p, p.Rating-old, randomSecret(9)
+	return p
+}
+func resolveTargetTurn(g *State, p PublicStats, c game.Coord) ([]game.TargetShot, PublicStats, error) {
+	if g.Ruleset != "contribution_targets_v2" {
+		return nil, p, ErrLegacyGame
+	}
+	if g.Status == "complete" {
+		return nil, p, ErrGameComplete
+	}
+	shot, complete, err := game.ResolveTargetShot(g.Board, g.Shots, c)
+	if err != nil {
+		return nil, p, err
+	}
+	g.Shots = append(g.Shots, shot)
+	if complete {
+		p = finishTargetState(g, p)
+	}
+	return []game.TargetShot{shot}, p, nil
 }
 func resolveTurn(g *State, p PublicStats, c game.Coord) ([]game.Shot, PublicStats, error) {
 	if g.Status == "complete" {

@@ -164,8 +164,8 @@ func TestAuthorizationBetweenUsers(t *testing.T) {
 	s, repo := testServer(t)
 	a, _ := repo.UpsertGitHubUser(context.Background(), User{GitHubID: 10, Login: "a"}, mockCells(s.now()))
 	b, _ := repo.UpsertGitHubUser(context.Background(), User{GitHubID: 11, Login: "b"}, mockCells(s.now()))
-	fleet, _ := game.PlaceFleet(game.SecureRand{})
-	g := &State{ID: uuid(), Status: "battle", Turn: "player", PlayerFleet: fleet, EnemyFleet: fleet, PlayerShots: []game.Shot{}, AIShots: []game.Shot{}}
+	board := mockCells(s.now())[:70]
+	g := &State{ID: uuid(), Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", Board: board, PeriodStart: board[0].Date, TargetCount: game.TargetCount(board)}
 	_ = repo.CreateGame(context.Background(), a.ID, g)
 	if _, err := repo.Game(context.Background(), b.ID, g.ID); err != ErrNotFound {
 		t.Fatal("user B read user A game")
@@ -180,14 +180,80 @@ func TestAuthorizationBetweenUsers(t *testing.T) {
 	}
 }
 func TestPublicGameHidesPersistedEnemyState(t *testing.T) {
-	g := &State{EnemyStart: "2025-01-01", EnemyFleet: []game.Ship{{Kind: "Destroyer", Cells: []game.Coord{{X: 1, Y: 1}}}}}
+	board := mockCells(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))[:70]
+	g := &State{ID: "game", Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", Board: board, PeriodStart: board[0].Date, TargetCount: game.TargetCount(board)}
 	b, _ := json.Marshal(g)
-	if !strings.Contains(string(b), "enemyFleet") {
-		t.Fatal("stored state lost hidden fleet")
+	if !strings.Contains(string(b), board[0].Date) || !strings.Contains(string(b), "contributionCount") {
+		t.Fatal("stored state lost the frozen contribution snapshot")
 	}
 	public, _ := json.Marshal(publicGame(g))
-	if strings.Contains(string(public), "enemyFleet") || strings.Contains(string(public), "2025-01-01") {
+	if strings.Contains(string(public), "date") || strings.Contains(string(public), "contributionCount") || strings.Contains(string(public), "contributionLevel") || strings.Contains(string(public), "periodStart") {
 		t.Fatal("public projection exposed hidden state")
+	}
+	target := game.Coord{}
+	for i, cell := range board {
+		if cell.ContributionCount > 0 {
+			target = game.Coord{X: i / 7, Y: i % 7}
+			break
+		}
+	}
+	shot, _, _ := game.ResolveTargetShot(board, nil, target)
+	g.Shots = []game.TargetShot{shot}
+	public, _ = json.Marshal(publicGame(g))
+	if !strings.Contains(string(public), "contributionCount") || strings.Contains(string(public), board[0].Date) {
+		t.Fatal("hit reveal should expose its intensity but not dates", string(public))
+	}
+}
+
+func TestSoloContributionTargetFlowAndStatsOnce(t *testing.T) {
+	s, repo := testServer(t)
+	token := devToken(t, s)
+	created := httptest.NewRecorder()
+	s.Handler().ServeHTTP(created, authed("POST", "/v1/games/solo", token, `{}`))
+	if created.Code != 201 {
+		t.Fatal(created.Code, created.Body.String())
+	}
+	var response struct {
+		ID          string `json:"id"`
+		TargetCount int    `json:"targetCount"`
+	}
+	_ = json.Unmarshal(created.Body.Bytes(), &response)
+	if response.ID == "" || response.TargetCount == 0 || strings.Contains(created.Body.String(), "date") || strings.Contains(created.Body.String(), "contributionCount") {
+		t.Fatal("active game leaked hidden board", created.Body.String())
+	}
+	repo.mu.Lock()
+	frozen := cloneState(repo.games[response.ID])
+	repo.mu.Unlock()
+	if len(frozen.Board) != 70 {
+		t.Fatal("frozen board must contain exactly 70 cells")
+	}
+	var finalBody string
+	for i, cell := range frozen.Board {
+		if cell.ContributionCount == 0 {
+			continue
+		}
+		shot := httptest.NewRecorder()
+		body := fmt.Sprintf(`{"x":%d,"y":%d}`, i/7, i%7)
+		s.Handler().ServeHTTP(shot, authed("POST", "/v1/games/"+response.ID+"/shots", token, body))
+		if shot.Code != 200 {
+			t.Fatal(shot.Code, shot.Body.String())
+		}
+		finalBody = shot.Body.String()
+	}
+	if !strings.Contains(finalBody, `"status":"complete"`) || !strings.Contains(finalBody, `"period"`) || !strings.Contains(finalBody, frozen.Board[0].Date) {
+		t.Fatal("completed game did not reveal the frozen period", finalBody)
+	}
+	if strings.Contains(finalBody, `"misses":1`) {
+		t.Fatal("empty cells should not be required for completion")
+	}
+	stats, _ := repo.Stats(context.Background(), repo.owners[response.ID], "solo")
+	if stats.Games != 1 || stats.Wins != 1 || stats.Hits != response.TargetCount {
+		t.Fatal("terminal stats were not applied exactly once", stats)
+	}
+	more := httptest.NewRecorder()
+	s.Handler().ServeHTTP(more, authed("POST", "/v1/games/"+response.ID+"/shots", token, `{"x":9,"y":6}`))
+	if more.Code != 409 || !strings.Contains(more.Body.String(), "game_complete") {
+		t.Fatal("completed game accepted another shot", more.Code, more.Body.String())
 	}
 }
 func TestPublicProfileWidgetAndEscaping(t *testing.T) {

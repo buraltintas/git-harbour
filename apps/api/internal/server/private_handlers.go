@@ -41,19 +41,9 @@ func (s *Server) contributions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"login": u.Login, "days": days})
 }
 
-type createReq struct {
-	StartDate string      `json:"startDate"`
-	Fleet     []game.Ship `json:"fleet"`
-}
-
 func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 	u, ok := s.needUser(w, r)
 	if !ok {
-		return
-	}
-	var q createReq
-	if json.NewDecoder(r.Body).Decode(&q) != nil || game.ValidateFleet(q.Fleet) != nil {
-		writeError(w, 422, "invalid_fleet", "Place every ship in bounds without overlap.")
 		return
 	}
 	days, e := s.repo.Contributions(r.Context(), u.ID)
@@ -61,26 +51,9 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 422, "contributions_missing", "Contribution history is unavailable.")
 		return
 	}
-	idx := -1
-	for i, c := range days {
-		if c.Date == q.StartDate {
-			idx = i / 7
-			break
-		}
-	}
-	weeks := len(days) / 7
-	if idx < 0 || idx+10 > weeks {
-		writeError(w, 422, "invalid_start", "Choose a complete 10-week range.")
-		return
-	}
-	enemyIdx, e := game.OpponentStart(weeks, idx, game.SecureRand{})
+	window, e := game.SelectTargetWindow(days, game.IdealMinTargets, game.IdealMaxTargets, game.SecureRand{})
 	if e != nil {
-		writeError(w, 422, "history_too_short", e.Error())
-		return
-	}
-	enemyFleet, e := game.PlaceFleet(game.SecureRand{})
-	if e != nil {
-		writeError(w, 500, "fleet_failed", "Could not prepare enemy fleet.")
+		writeError(w, 422, "history_not_playable", "No playable ten-week contribution window is available yet.")
 		return
 	}
 	stats, e := s.repo.Stats(r.Context(), u.ID, "solo")
@@ -88,7 +61,7 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "stats_failed", "Could not load stats.")
 		return
 	}
-	g := &State{ID: uuid(), Status: "battle", Turn: "player", PlayerBoard: append([]game.Cell(nil), days[idx*7:idx*7+70]...), EnemyBoard: stripDates(days[enemyIdx*7 : enemyIdx*7+70]), PlayerFleet: q.Fleet, EnemyFleet: enemyFleet, PlayerShots: []game.Shot{}, AIShots: []game.Shot{}, PlayerStart: q.StartDate, EnemyStart: days[enemyIdx*7].Date, Stats: stats}
+	g := &State{ID: uuid(), Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", Board: window.Cells, Shots: []game.TargetShot{}, PeriodStart: window.Cells[0].Date, TargetCount: window.TargetCount, Stats: stats}
 	if e = s.repo.CreateGame(r.Context(), u.ID, g); e != nil {
 		writeError(w, 500, "game_create_failed", "Could not create the game.")
 		return
@@ -102,6 +75,10 @@ func (s *Server) getGame(w http.ResponseWriter, r *http.Request) {
 	}
 	g, e := s.repo.Game(r.Context(), u.ID, r.PathValue("id"))
 	if e != nil {
+		if e == ErrLegacyGame {
+			writeError(w, 410, "legacy_game_retired", "This prototype fleet battle was retired by the contribution-target gameplay update.")
+			return
+		}
 		if p, ok := s.repo.(PVPRepository); ok {
 			if pg, pe := p.PVPGame(r.Context(), u.ID, r.PathValue("id")); pe == nil {
 				writeJSON(w, 200, pvpDTO(pg))
@@ -140,7 +117,13 @@ func (s *Server) shot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if e != nil {
-		writeError(w, 409, "shot_rejected", e.Error())
+		code := "shot_rejected"
+		if e == ErrGameComplete {
+			code = "game_complete"
+		} else if e.Error() == "duplicate shot" {
+			code = "duplicate_shot"
+		}
+		writeError(w, 409, code, e.Error())
 		return
 	}
 	writeJSON(w, 200, map[string]any{"game": publicGame(g), "events": events})

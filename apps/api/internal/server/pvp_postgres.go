@@ -100,7 +100,7 @@ func (p *PostgresRepository) AcceptChallenge(ctx context.Context, uid, code stri
 		return Challenge{}, nil, ErrConflict
 	}
 	gid := uuid()
-	_, e = tx.Exec(ctx, `INSERT INTO games(id,mode,status,current_turn,player_id,state) VALUES($1,'pvp','setup','pending',$2,'{}')`, gid, creator)
+	_, e = tx.Exec(ctx, `INSERT INTO games(id,mode,ruleset,status,current_turn,player_id,state) VALUES($1,'pvp','fleet_v1','setup','pending',$2,'{}')`, gid, creator)
 	if e == nil {
 		_, e = tx.Exec(ctx, `UPDATE challenges SET opponent_id=$2,game_id=$3,status='accepted' WHERE code=$1`, code, uid, gid)
 	}
