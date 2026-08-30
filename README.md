@@ -15,7 +15,7 @@ npm ci
 npm run dev:web
 ```
 
-Open `http://localhost:5173`. Vite development mode exposes one explicit development-account button; production builds expose only **Continue with GitHub**. Compose runs versioned migrations once before starting the API. Without Docker, set `APP_ENV=development` and `GITHARBOUR_DEV_AUTH=true`; the API may use its development-only memory repository when `DATABASE_URL` is empty.
+Open `http://localhost:5173`. Vite development mode exposes Alice and Bob test accounts so a challenge can be exercised in one browser; production builds expose only **Continue with GitHub**. Compose runs versioned migrations once before starting the API. Without Docker, set `APP_ENV=development` and `GITHARBOUR_DEV_AUTH=true`; the API may use its development-only memory repository when `DATABASE_URL` is empty.
 
 ```bash
 npm test
@@ -30,7 +30,7 @@ cd apps/api && go vet ./...
 3. Use the PostgreSQL Session Pooler connection string for Cloud Run where appropriate; retain its required `sslmode` settings.
 4. Store the connection string only as the server-side `DATABASE_URL` (prefer Google Secret Manager).
 5. Run `DATABASE_URL='…' go run ./cmd/migrate up` from `apps/api`, or run the built container once with command `/migrate up`.
-6. Verify `schema_migrations` contains `001_init.sql`, `002_auth.sql`, and `003_multi_user_games.sql`.
+6. Verify `schema_migrations` contains migrations through `004_pvp.sql`.
 7. Do not configure Supabase Auth.
 8. Do not expose an anon key, service-role key, connection string, or any Supabase credential to the web build.
 
@@ -96,4 +96,8 @@ Replace `API_URL` and the login with deployed values:
 
 The static Pages/Cloud Run split prevents a same-origin httpOnly session cookie. The web app therefore stores only the opaque GitHarbour application token in local storage. This creates an honest XSS trade-off: the app uses a restrictive static meta CSP, avoids unsafe HTML and third-party scripts, removes login exchange codes immediately, and never logs tokens. GitHub access tokens and all database credentials remain server-side.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/API.md](docs/API.md). Full challenge-link PvP remains the next phase.
+## Developer vs Developer
+
+Choose **Challenge a developer**, copy the private link, and send it to one person. Each player independently freezes a 10-week harbour and fleet. Once both are ready, the server chooses the opening player; turns can be taken asynchronously from **Battles**. Completion updates only PvP Elo/statistics, publishes safe history/share surfaces, and offers an opponent-restricted rematch link.
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/API.md](docs/API.md), and [docs/GAME_RULES.md](docs/GAME_RULES.md).

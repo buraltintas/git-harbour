@@ -8,7 +8,9 @@ The fleet is Carrier (5), Battleship (4), Cruiser (3), Submarine (3), and Destro
 
 ## Turns and victory
 
-The player and AI alternate one shot per turn. A hit gives no extra shot. A coordinate can be targeted only once. A ship sinks when every coordinate is hit; the first side to sink all five opposing ships wins. Finished games reject further actions.
+Opponents alternate one shot per turn. A hit gives no extra shot. A coordinate can be targeted only once. A ship sinks when every coordinate is hit; the first side to sink all five opposing ships wins. Finished games reject further actions.
+
+In PvP, the server randomly chooses the opening player only after both immutable setups are locked. A challenge can be accepted once, cannot be self-accepted, expires after seven days, and reveals neither the opposing fleet nor its dates during play. A rematch is a new setup and is reserved for the previous opponent.
 
 ## Solo opponent
 
@@ -22,3 +24,4 @@ The AI consumes only prior public shot outcomes, never player coordinates. It hu
 
 The server accepts only intent: harbour start, fleet placement, or target coordinate. It validates placement, locks the game during a turn, derives hit/miss/sunk/victory, executes the AI response, and updates terminal ratings/statistics once in the same transaction. Hidden enemy fleet coordinates are never serialized in client projections.
 
+Solo and PvP ratings/statistics are independent. A PvP result calculates both Elo changes from the two unchanged pre-match ratings, persists the two result rows atomically, and exposes only completed history publicly.
