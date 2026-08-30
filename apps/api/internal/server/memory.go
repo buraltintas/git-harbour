@@ -27,10 +27,15 @@ type MemoryRepository struct {
 	games         map[string]*State
 	owners        map[string]string
 	shares        map[string]string
+	challenges    map[string]*Challenge
+	pvpGames      map[string]*PVPGame
+	pvpHistory    map[string][]PVPHistory
+	pvpShares     map[string]PVPShare
+	pvpRematches  map[string]string
 }
 
 func NewMemoryRepository() *MemoryRepository {
-	return &MemoryRepository{users: map[string]User{}, github: map[int64]string{}, contributions: map[string][]game.Cell{}, stats: map[string]map[string]PublicStats{}, oauth: map[string]expiring{}, exchange: map[string]expiring{}, sessions: map[string]expiring{}, games: map[string]*State{}, owners: map[string]string{}, shares: map[string]string{}}
+	return &MemoryRepository{users: map[string]User{}, github: map[int64]string{}, contributions: map[string][]game.Cell{}, stats: map[string]map[string]PublicStats{}, oauth: map[string]expiring{}, exchange: map[string]expiring{}, sessions: map[string]expiring{}, games: map[string]*State{}, owners: map[string]string{}, shares: map[string]string{}, challenges: map[string]*Challenge{}, pvpGames: map[string]*PVPGame{}, pvpHistory: map[string][]PVPHistory{}, pvpShares: map[string]PVPShare{}, pvpRematches: map[string]string{}}
 }
 func hashKey(b []byte) string { return string(b) }
 func (m *MemoryRepository) PutOAuthState(_ context.Context, h []byte, e time.Time) error {
@@ -176,7 +181,7 @@ func (m *MemoryRepository) PublicUser(_ context.Context, login string) (PublicUs
 	} else {
 		sum.Preview = append([]game.Cell(nil), days...)
 	}
-	return PublicUser{Login: u.Login, Name: u.Name, AvatarURL: u.AvatarURL, Solo: decorate(m.stats[u.ID]["solo"]), PVP: decorate(m.stats[u.ID]["pvp"]), JoinedAt: u.JoinedAt, PublicContributionSummary: sum}, nil
+	return PublicUser{Login: u.Login, Name: u.Name, AvatarURL: u.AvatarURL, Solo: decorate(m.stats[u.ID]["solo"]), PVP: decorate(m.stats[u.ID]["pvp"]), JoinedAt: u.JoinedAt, PublicContributionSummary: sum, PVPHistory: append([]PVPHistory(nil), m.pvpHistory[u.ID]...)}, nil
 }
 func (m *MemoryRepository) CreateGame(_ context.Context, uid string, g *State) error {
 	m.mu.Lock()

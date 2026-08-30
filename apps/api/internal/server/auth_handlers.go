@@ -82,7 +82,21 @@ func (s *Server) devSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	days := mockCells(s.now())
-	u, e := s.repo.UpsertGitHubUser(r.Context(), User{GitHubID: 583231, Login: "octocat", Name: "The Octocat", AvatarURL: "https://github.com/octocat.png"}, days)
+	profiles := map[string]User{
+		"octocat": {GitHubID: 583231, Login: "octocat", Name: "The Octocat", AvatarURL: "https://github.com/octocat.png"},
+		"alice":   {GitHubID: 100001, Login: "alice", Name: "Alice Harbour", AvatarURL: "https://github.com/identicons/alice.png"},
+		"bob":     {GitHubID: 100002, Login: "bob", Name: "Bob Harbour", AvatarURL: "https://github.com/identicons/bob.png"},
+	}
+	login := strings.ToLower(r.URL.Query().Get("user"))
+	if login == "" {
+		login = "octocat"
+	}
+	profile, ok := profiles[login]
+	if !ok {
+		writeError(w, 422, "invalid_dev_user", "Choose a supported development user.")
+		return
+	}
+	u, e := s.repo.UpsertGitHubUser(r.Context(), profile, days)
 	if e != nil {
 		writeError(w, 500, "dev_session_failed", "Could not create development user.")
 		return

@@ -15,6 +15,7 @@ type Server struct {
 	repo   Repository
 	github GitHubClient
 	now    func() time.Time
+	limits *requestLimiter
 }
 
 func New(ctx context.Context) (*Server, error) {
@@ -54,11 +55,11 @@ func NewWithConfig(ctx context.Context, cfg Config, repo Repository, gh GitHubCl
 	if gh == nil {
 		gh = NewHTTPGitHubClient(cfg)
 	}
-	return &Server{cfg: cfg, repo: repo, github: gh, now: func() time.Time { return time.Now().UTC() }}, nil
+	return &Server{cfg: cfg, repo: repo, github: gh, now: func() time.Time { return time.Now().UTC() }, limits: newRequestLimiter(60, time.Minute)}, nil
 }
 func checkSchema(ctx context.Context, p *pgxpool.Pool) error {
 	var ok bool
-	e := p.QueryRow(ctx, `SELECT to_regclass('public.auth_sessions') IS NOT NULL AND to_regclass('public.games') IS NOT NULL`).Scan(&ok)
+	e := p.QueryRow(ctx, `SELECT to_regclass('public.auth_sessions') IS NOT NULL AND to_regclass('public.games') IS NOT NULL AND to_regclass('public.pvp_shots') IS NOT NULL AND to_regclass('public.pvp_results') IS NOT NULL`).Scan(&ok)
 	if e != nil {
 		return e
 	}
@@ -81,13 +82,21 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /v1/games/solo", s.createGame)
 	m.HandleFunc("GET /v1/games/{id}", s.getGame)
 	m.HandleFunc("POST /v1/games/{id}/shots", s.shot)
+	m.HandleFunc("GET /v1/public/challenges/{code}", s.publicChallenge)
+	m.HandleFunc("POST /v1/challenges", s.createChallenge)
+	m.HandleFunc("POST /v1/challenges/{code}/accept", s.acceptChallenge)
+	m.HandleFunc("POST /v1/challenges/{code}/cancel", s.cancelChallenge)
+	m.HandleFunc("POST /v1/challenges/{code}/ready", s.readyChallenge)
+	m.HandleFunc("GET /v1/battles", s.battles)
+	m.HandleFunc("POST /v1/games/{id}/rematch", s.rematch)
+	m.HandleFunc("GET /v1/public/leaderboards/pvp", s.leaderboard)
 	m.HandleFunc("GET /v1/public/users/{login}", s.publicUserJSON)
 	m.HandleFunc("GET /u/{login}", s.publicUserHTML)
 	m.HandleFunc("GET /widgets/{file}", s.widget)
 	m.HandleFunc("GET /share/users/{file}", s.widget)
 	m.HandleFunc("GET /s/{id}", s.shareHTML)
 	m.HandleFunc("GET /share/games/{file}", s.sharePNG)
-	return s.cors(m)
+	return s.cors(s.rateLimitPVP(m))
 }
 func (s *Server) cors(next http.Handler) http.Handler {
 	allowed := map[string]bool{}

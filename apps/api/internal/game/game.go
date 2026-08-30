@@ -280,22 +280,7 @@ func Elo(rating, opponent int, won bool) int {
 	return int(float64(rating) + 32*(score-expected) + 0.5)
 }
 func UpdateStats(s Stats, won bool, shots, hits int) Stats {
-	s.Games++
-	s.Shots += shots
-	s.Hits += hits
-	if won {
-		s.Wins++
-		s.CurrentStreak++
-		s.WinShots += shots
-		if s.CurrentStreak > s.LongestStreak {
-			s.LongestStreak = s.CurrentStreak
-		}
-	} else {
-		s.Losses++
-		s.CurrentStreak = 0
-	}
-	s.Rating = Elo(s.Rating, 1200, won)
-	return s
+	return UpdateStatsAgainst(s, 1200, won, shots, hits)
 }
 func DateRange(start time.Time) (string, string) {
 	return start.Format("2006-01-02"), start.AddDate(0, 0, 69).Format("2006-01-02")

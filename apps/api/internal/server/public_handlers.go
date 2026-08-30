@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"html/template"
+	"image/png"
 	"net/http"
 	"strings"
 	"time"
@@ -84,9 +85,20 @@ func (s *Server) widget(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300, stale-while-revalidate=3600")
-	fmt.Fprintf(w, `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="140" viewBox="0 0 480 140" role="img" aria-label="GitHarbour stats for @%s"><rect x=".5" y=".5" width="479" height="139" rx="8" fill="%s" stroke="%s"/><path d="M24 25h20v20H24zM29 30h10v10H29z" fill="%s"/><text x="54" y="40" fill="%s" font-family="system-ui,-apple-system,sans-serif" font-size="18" font-weight="700">GitHarbour</text><text x="24" y="69" fill="%s" font-family="system-ui,-apple-system,sans-serif" font-size="14">@%s · %s</text><text x="24" y="97" fill="%s" font-family="system-ui,-apple-system,sans-serif" font-size="16" font-weight="600">%d Solo rating</text><text x="194" y="97" fill="%s" font-family="system-ui,-apple-system,sans-serif" font-size="14">%d wins · %.0f%% accuracy</text><text x="24" y="122" fill="%s" font-family="system-ui,-apple-system,sans-serif" font-size="12">Your GitHub history is a battlefield.</text></svg>`, escape(u.Login), bg, border, accent, text, muted, escape(u.Login), escape(u.Solo.Rank), text, u.Solo.Rating, text, u.Solo.Wins, u.Solo.Accuracy, accent)
+	fmt.Fprintf(w, `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="140" viewBox="0 0 480 140" role="img" aria-label="GitHarbour stats for @%s"><rect x=".5" y=".5" width="479" height="139" rx="8" fill="%s" stroke="%s"/><path d="M24 20h20v20H24zM29 25h10v10H29z" fill="%s"/><text x="54" y="35" fill="%s" font-family="system-ui,-apple-system,sans-serif" font-size="18" font-weight="700">GitHarbour · @%s</text><text x="24" y="68" fill="%s" font-family="system-ui,-apple-system,sans-serif" font-size="14">Solo · %s · %d · %d wins</text><text x="24" y="95" fill="%s" font-family="system-ui,-apple-system,sans-serif" font-size="14">PvP · %s · %d · %d wins</text><text x="24" y="122" fill="%s" font-family="system-ui,-apple-system,sans-serif" font-size="12">Your GitHub history is a battlefield.</text></svg>`, escape(u.Login), bg, border, accent, text, escape(u.Login), muted, escape(u.Solo.Rank), u.Solo.Rating, u.Solo.Wins, text, escape(u.PVP.Rank), u.PVP.Rating, u.PVP.Wins, accent)
 }
 func (s *Server) shareHTML(w http.ResponseWriter, r *http.Request) {
+	if p, ok := s.repo.(PVPShareRepository); ok {
+		if x, e := p.PublicPVPShare(r.Context(), r.PathValue("id")); e == nil {
+			title := fmt.Sprintf("@%s defeated @%s on GitHarbour", x.Winner.Login, x.Loser.Login)
+			desc := fmt.Sprintf("%d shots · %+.0d rating · %s", x.WinnerResult.Shots, x.WinnerResult.RatingDelta, x.Rank)
+			imageURL := s.cfg.PublicAPIURL + "/share/games/" + x.ShareID + ".png"
+			canonical := s.cfg.PublicAPIURL + "/s/" + x.ShareID
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			fmt.Fprintf(w, `<!doctype html><html><head><meta charset="utf-8"><title>%s</title><meta property="og:title" content="@%s vs @%s — GitHarbour"><meta property="og:description" content="%s"><meta property="og:image" content="%s"><meta property="og:url" content="%s"><meta name="twitter:card" content="summary_large_image"></head><body><main><h1>%s</h1><p>%s</p></main></body></html>`, escape(title), escape(x.Winner.Login), escape(x.Loser.Login), escape(desc), escape(imageURL), escape(canonical), escape(title), escape(desc))
+			return
+		}
+	}
 	g, u, e := s.repo.PublicShare(r.Context(), r.PathValue("id"))
 	if e != nil {
 		http.NotFound(w, r)
@@ -106,6 +118,19 @@ func (s *Server) sharePNG(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sid := strings.TrimSuffix(file, ".png")
+	if p, ok := s.repo.(PVPShareRepository); ok {
+		if share, e := p.PublicPVPShare(r.Context(), sid); e == nil {
+			img, e := renderPVPShareCard(share)
+			if e != nil {
+				writeError(w, 500, "share_image_failed", "Could not render share image.")
+				return
+			}
+			w.Header().Set("Content-Type", "image/png")
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+			_ = png.Encode(w, img)
+			return
+		}
+	}
 	if _, _, e := s.repo.PublicShare(r.Context(), sid); e != nil {
 		http.NotFound(w, r)
 		return

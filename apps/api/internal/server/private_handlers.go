@@ -102,6 +102,12 @@ func (s *Server) getGame(w http.ResponseWriter, r *http.Request) {
 	}
 	g, e := s.repo.Game(r.Context(), u.ID, r.PathValue("id"))
 	if e != nil {
+		if p, ok := s.repo.(PVPRepository); ok {
+			if pg, pe := p.PVPGame(r.Context(), u.ID, r.PathValue("id")); pe == nil {
+				writeJSON(w, 200, pvpDTO(pg))
+				return
+			}
+		}
 		writeError(w, 404, "game_not_found", "Game was not found.")
 		return
 	}
@@ -119,6 +125,17 @@ func (s *Server) shot(w http.ResponseWriter, r *http.Request) {
 	}
 	g, events, e := s.repo.Shoot(r.Context(), u.ID, r.PathValue("id"), c)
 	if e == ErrNotFound {
+		if p, ok := s.repo.(PVPRepository); ok {
+			pg, pev, pe := p.ShootPVP(r.Context(), u.ID, r.PathValue("id"), c)
+			if pe == nil {
+				writeJSON(w, 200, map[string]any{"game": pvpDTO(pg), "events": pev})
+				return
+			}
+			if pe != ErrNotFound {
+				writePVPError(w, pe)
+				return
+			}
+		}
 		writeError(w, 404, "game_not_found", "Game was not found.")
 		return
 	}

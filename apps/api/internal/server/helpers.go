@@ -19,6 +19,10 @@ var ErrNotFound = errors.New("not found")
 var ErrUnauthorized = errors.New("unauthorized")
 var ErrExpired = errors.New("expired or consumed")
 var ErrConflict = errors.New("conflict")
+var ErrSelfChallenge = errors.New("self challenge")
+var ErrNotYourTurn = errors.New("not your turn")
+var ErrSetupLocked = errors.New("setup locked")
+var ErrGameComplete = errors.New("game complete")
 
 func randomSecret(n int) string {
 	b := make([]byte, n)

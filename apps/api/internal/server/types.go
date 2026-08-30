@@ -8,9 +8,12 @@ import (
 )
 
 type User struct {
-	ID, Login, Name, AvatarURL string
-	GitHubID                   int64
-	JoinedAt                   time.Time
+	ID        string    `json:"-"`
+	Login     string    `json:"login"`
+	Name      string    `json:"name"`
+	AvatarURL string    `json:"avatarUrl"`
+	GitHubID  int64     `json:"-"`
+	JoinedAt  time.Time `json:"-"`
 }
 type PublicStats struct {
 	Games              int     `json:"games"`
@@ -35,6 +38,7 @@ type PublicUser struct {
 	PVP                       PublicStats         `json:"pvp"`
 	JoinedAt                  time.Time           `json:"joinedAt"`
 	PublicContributionSummary ContributionSummary `json:"publicContributionSummary"`
+	PVPHistory                []PVPHistory        `json:"pvpHistory"`
 }
 type ContributionSummary struct {
 	Total      int         `json:"total"`

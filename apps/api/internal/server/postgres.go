@@ -198,6 +198,10 @@ func (p *PostgresRepository) PublicUser(ctx context.Context, login string) (Publ
 		preview[i], preview[j] = preview[j], preview[i]
 	}
 	u.PublicContributionSummary.Preview = preview
+	u.PVPHistory, e = p.PVPHistory(ctx, uid, 10)
+	if e != nil {
+		return u, e
+	}
 	return u, rows.Err()
 }
 func (p *PostgresRepository) CreateGame(ctx context.Context, uid string, g *State) error {
@@ -207,7 +211,7 @@ func (p *PostgresRepository) CreateGame(ctx context.Context, uid string, g *Stat
 }
 func (p *PostgresRepository) Game(ctx context.Context, uid, id string) (*State, error) {
 	var b []byte
-	e := p.pool.QueryRow(ctx, `SELECT state FROM games WHERE id=$1 AND player_id=$2`, id, uid).Scan(&b)
+	e := p.pool.QueryRow(ctx, `SELECT state FROM games WHERE id=$1 AND player_id=$2 AND mode='solo'`, id, uid).Scan(&b)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -225,7 +229,7 @@ func (p *PostgresRepository) Shoot(ctx context.Context, uid, id string, c game.C
 	}
 	defer tx.Rollback(ctx)
 	var b []byte
-	e = tx.QueryRow(ctx, `SELECT state FROM games WHERE id=$1 AND player_id=$2 FOR UPDATE`, id, uid).Scan(&b)
+	e = tx.QueryRow(ctx, `SELECT state FROM games WHERE id=$1 AND player_id=$2 AND mode='solo' FOR UPDATE`, id, uid).Scan(&b)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return nil, nil, ErrNotFound
 	}
