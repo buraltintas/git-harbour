@@ -2,7 +2,7 @@
 
 **Your GitHub history is a battlefield.** GitHarbour turns a frozen 10-week slice of a developer’s public GitHub contribution calendar into a fair, server-authoritative strategy game.
 
-The production shape is deliberately simple: a React/Vite/Primer application on GitHub Pages calls a Go API on Cloud Run, and the API alone accesses Supabase PostgreSQL plus GitHub OAuth/GraphQL. Supabase is managed PostgreSQL only—there is no Supabase Auth, browser SDK, Realtime, Data API, or direct database access.
+The production shape is deliberately simple: a React/Vite/Primer application on GitHub Pages calls a Go API on Koyeb, and the API alone accesses Supabase PostgreSQL plus GitHub OAuth/GraphQL. Supabase is managed PostgreSQL only—there is no Supabase Auth, browser SDK, Realtime, Data API, or direct database access.
 
 ## Local development
 
@@ -27,14 +27,14 @@ cd apps/api && go vet ./...
 
 1. Create a Supabase project.
 2. Open **Project Settings → Database → Connection string**.
-3. Use the PostgreSQL Session Pooler connection string for Cloud Run where appropriate; retain its required `sslmode` settings.
-4. Store the connection string only as the server-side `DATABASE_URL` (prefer Google Secret Manager).
+3. Use the PostgreSQL Session Pooler connection string for Koyeb's IPv4 network; retain its required `sslmode` settings and percent-encode the password.
+4. Store the connection string only as a Koyeb secret named `DATABASE_URL`.
 5. Run `DATABASE_URL='…' go run ./cmd/migrate up` from `apps/api`, or run the built container once with command `/migrate up`.
 6. Verify `schema_migrations` contains migrations through `004_pvp.sql`.
 7. Do not configure Supabase Auth.
 8. Do not expose an anon key, service-role key, connection string, or any Supabase credential to the web build.
 
-Cloud Run instances never run migrations during startup. In `APP_ENV=production`, a missing/unreachable database or missing schema fails startup; there is no memory fallback. Pool defaults are five maximum connections, zero minimum connections, and a 30-minute maximum connection lifetime.
+Koyeb instances never run migrations during startup. In `APP_ENV=production`, a missing/unreachable database or missing schema fails startup; there is no memory fallback. Pool defaults are five maximum connections, zero minimum connections, and a 30-minute maximum connection lifetime.
 
 ## GitHub OAuth App setup
 
@@ -48,7 +48,7 @@ Local:
 Production:
 
 - Homepage URL: `https://buraltintas.github.io/git-harbour/`
-- Authorization callback URL: `<CLOUD_RUN_API_URL>/auth/github/callback`
+- Authorization callback URL: `https://<KOYEB_DOMAIN>/auth/github/callback`
 
 The Pages app sends the browser to the API. The API validates a single-use state, exchanges the GitHub code server-side, imports the public identity and `contributionCalendar`, discards the GitHub token, and returns through `GITHUB_WEB_CALLBACK` with a 90-second single-use exchange code. The browser exchanges that for an opaque GitHarbour bearer token. No explicit OAuth scope is requested: GitHub documents `(no scope)` as read-only public information, which is sufficient for this public-data MVP.
 
@@ -56,22 +56,22 @@ The Pages app sends the browser to the API. The API validates a single-use state
 
 GitHub repository variables used by Pages:
 
-- `API_URL`: public Cloud Run base URL. It becomes `VITE_API_URL`.
+- `API_URL`: public Koyeb base URL. It becomes `VITE_API_URL`.
 
 GitHub repository secrets: none are required by the static Pages build. Never create a `VITE_*` secret.
 
-Cloud Run environment variables:
+Koyeb environment variables:
 
 - `APP_ENV=production`
 - `DB_MAX_CONNS=5`, `DB_MIN_CONNS=0`, `DB_MAX_CONN_LIFETIME=30m`
 - `WEB_ORIGIN=https://buraltintas.github.io`
-- `PUBLIC_API_URL=<CLOUD_RUN_API_URL>`
+- `PUBLIC_API_URL=https://<KOYEB_DOMAIN>`
 - `WEB_APP_URL=https://buraltintas.github.io/git-harbour/#/`
 - `GITHUB_CLIENT_ID`
-- `GITHUB_OAUTH_CALLBACK=<CLOUD_RUN_API_URL>/auth/github/callback`
+- `GITHUB_OAUTH_CALLBACK=https://<KOYEB_DOMAIN>/auth/github/callback`
 - `GITHUB_WEB_CALLBACK=https://buraltintas.github.io/git-harbour/#/auth/callback`
 
-Cloud Run/Google Secret Manager secrets:
+Koyeb secrets:
 
 - `DATABASE_URL`
 - `GITHUB_CLIENT_SECRET`
@@ -94,10 +94,10 @@ Replace `API_URL` and the login with deployed values:
 
 ## Security notes
 
-The static Pages/Cloud Run split prevents a same-origin httpOnly session cookie. The web app therefore stores only the opaque GitHarbour application token in local storage. This creates an honest XSS trade-off: the app uses a restrictive static meta CSP, avoids unsafe HTML and third-party scripts, removes login exchange codes immediately, and never logs tokens. GitHub access tokens and all database credentials remain server-side.
+The static Pages/Koyeb split prevents a same-origin httpOnly session cookie. The web app therefore stores only the opaque GitHarbour application token in local storage. This creates an honest XSS trade-off: the app uses a restrictive static meta CSP, avoids unsafe HTML and third-party scripts, removes login exchange codes immediately, and never logs tokens. GitHub access tokens and all database credentials remain server-side.
 
 ## Developer vs Developer
 
 Choose **Challenge a developer**, copy the private link, and send it to one person. Each player independently freezes a 10-week harbour and fleet. Once both are ready, the server chooses the opening player; turns can be taken asynchronously from **Battles**. Completion updates only PvP Elo/statistics, publishes safe history/share surfaces, and offers an opponent-restricted rematch link.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/API.md](docs/API.md), and [docs/GAME_RULES.md](docs/GAME_RULES.md).
+See [docs/KOYEB.md](docs/KOYEB.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/API.md](docs/API.md), and [docs/GAME_RULES.md](docs/GAME_RULES.md).

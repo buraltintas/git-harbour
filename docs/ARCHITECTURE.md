@@ -2,7 +2,7 @@
 
 ## Production boundary
 
-`GitHub Pages (React/Vite/Primer) → HTTPS → Cloud Run (Go) → pgx → Supabase PostgreSQL`. The API also calls GitHub OAuth and GraphQL. Supabase is PostgreSQL only; the browser does not know it exists.
+`GitHub Pages (React/Vite/Primer) → HTTPS → Koyeb (Go container) → pgx → Supabase PostgreSQL`. The API also calls GitHub OAuth and GraphQL. Supabase is PostgreSQL only; the browser does not know it exists.
 
 GitHub Pages cannot server-render arbitrary per-user metadata. The Pages root is a crawlable static landing page, while the API serves canonical HTML at `/u/{login}` and `/s/{shareId}`. Hash routes such as `#/u/{login}` provide interactive app views without fragile Pages rewrites.
 
@@ -35,8 +35,8 @@ Contribution refresh never touches snapshots inside existing games. Hidden enemy
 
 ## Public and deployment surfaces
 
-The API exposes safe public JSON, canonical HTML, escaped SVG widgets, and completed-game share HTML. CORS echoes only configured origins. Pages receives only public `VITE_API_URL`/`VITE_BASE_PATH`. Cloud Run receives server configuration and secrets; Supabase and GitHub secrets never enter GitHub Actions’ web build.
+The API exposes safe public JSON, canonical HTML, escaped SVG widgets, and completed-game share HTML. CORS echoes only configured origins. Pages receives only public `VITE_API_URL`/`VITE_BASE_PATH`. Koyeb receives server configuration and secrets; Supabase and GitHub secrets never enter GitHub Actions’ web build.
 
 The web polls only active challenge/battle views. PostgreSQL remains the sole coordination authority; no direct browser database access, Realtime channel, or WebSocket is involved.
 
-PvP mutations also have a conservative per-session (or unauthenticated IP) process-local request limit. PostgreSQL constraints and row locks remain the integrity boundary across Cloud Run instances. A shared edge/distributed limiter and notification delivery are future operational enhancements if traffic requires them.
+PvP mutations also have a conservative per-session (or unauthenticated IP) process-local request limit. PostgreSQL constraints and row locks remain the integrity boundary across Koyeb instances. A shared edge/distributed limiter and notification delivery are future operational enhancements if traffic requires them.
