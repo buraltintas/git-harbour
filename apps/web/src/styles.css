@@ -67,7 +67,7 @@ html[data-color-mode=dark] .cell.level-4 { background: #39d353; }
 .legend i.miss { border: 2px solid #57606a; background: transparent; }
 .result-head { text-align: center; max-width: 680px; margin: 16px auto 32px; }
 .result-head h2 { font-size: 34px; }
-.result-stats { display: grid; grid-template-columns: repeat(3,1fr); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 30px; }
+.result-stats { display: grid; grid-template-columns: repeat(4,1fr); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 30px; }
 .result-stats div { display: grid; gap: 4px; padding: 20px; text-align: center; }
 .result-stats div+div { border-left: 1px solid var(--border); }
 .result-stats span, .result-stats small { color: var(--muted); }

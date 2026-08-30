@@ -15,13 +15,13 @@ describe('API session boundary',()=>{
     vi.stubGlobal('fetch',fetchMock);await api.me();
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer app-token');
   });
-  it('creates Solo without client board data and submits only shot coordinates',async()=>{
+  it('creates Solo with only the selected period and submits only shot coordinates',async()=>{
     session.set('app-token');
     const fetchMock=vi.fn().mockImplementation(()=>Promise.resolve(new Response(JSON.stringify({id:'g',game:{id:'g'}}),{status:200,headers:{'Content-Type':'application/json'}})));
     vi.stubGlobal('fetch',fetchMock);
-    await api.create();
+    await api.create('2026-01-04');
     expect(fetchMock.mock.calls[0][0]).toContain('/v1/games/solo');
-    expect(fetchMock.mock.calls[0][1].body).toBe('{}');
+    expect(fetchMock.mock.calls[0][1].body).toBe('{"playerStart":"2026-01-04"}');
     await api.shot('game-1',4,3);
     expect(fetchMock.mock.calls[1][0]).toContain('/v1/games/game-1/shots');
     expect(fetchMock.mock.calls[1][1].body).toBe('{"x":4,"y":3}');

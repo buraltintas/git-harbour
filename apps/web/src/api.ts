@@ -1,4 +1,4 @@
-import type { Battles, Challenge, Day, Game, LeaderboardEntry, PublicUser, User } from './types';
+import type { BattleEvent, Battles, Challenge, Day, Game, LeaderboardEntry, PublicUser, User } from './types';
 import { session } from './session';
 export const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 const emptyStats={games:0,wins:0,losses:0,rating:1200,shots:0,hits:0,currentStreak:0,longestStreak:0,winRate:0,accuracy:0,averageShotsPerWin:0,rank:'Officer'};
@@ -47,14 +47,14 @@ export const api = {
     ),
   contributions: () => request<{ days: Day[] }>('/v1/me/contributions'),
   me: () => request<User>('/v1/me'),
-  create: () =>
+  create: (playerStart: string) =>
     request<Game>('/v1/games/solo', {
       method: 'POST',
-      body: '{}',
+      body: JSON.stringify({playerStart}),
     }),
   game: (id: string) => request<Game>(`/v1/games/${id}`),
   shot: (id: string, x: number, y: number) =>
-    request<{ game: Game }>(`/v1/games/${id}/shots`, {
+    request<{ game: Game; events: BattleEvent[] }>(`/v1/games/${id}/shots`, {
       method: 'POST',
       body: JSON.stringify({ x, y }),
     }),
@@ -75,5 +75,5 @@ export const api = {
   leaderboard:()=>request<{entries:LeaderboardEntry[]}>('/v1/public/leaderboards/pvp',undefined,false),
 };
 
-const friendly:Record<string,string>={pvp_refit:'Developer vs Developer is being updated for contribution-target harbours.',history_not_playable:'Your imported history does not yet contain a playable ten-week window.',legacy_game_retired:'That pre-launch battle used the retired rules.',rate_limited:'Too many actions arrived at once. Wait a moment and continue.',game_not_found:'This battle is unavailable.',duplicate_shot:'That cell has already been targeted.',game_complete:'This battle is already complete.'};
+const friendly:Record<string,string>={pvp_refit:'Developer vs Developer is being updated for contribution-target harbours.',history_not_playable:'Your imported history does not contain two playable ten-week windows yet.',invalid_player_harbour:'Choose a playable ten-week contribution harbour.',legacy_game_retired:'That earlier one-sided hunt was retired when reciprocal Solo combat launched.',rate_limited:'Too many actions arrived at once. Wait a moment and continue.',game_not_found:'This battle is unavailable.',duplicate_shot:'That cell has already been targeted.',game_complete:'This battle is already complete.'};
 export function friendlyError(error:unknown,fallback='Something went wrong. Try again.') { return error instanceof ApiError?(friendly[error.code]||fallback):fallback; }

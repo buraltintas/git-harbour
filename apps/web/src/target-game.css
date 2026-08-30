@@ -14,6 +14,10 @@
   animation: hit .2s ease-out;
 }
 
+.cell.target {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent);
+}
+
 .target-cell.hit.level-1 { background: #9be9a8 !important; }
 .target-cell.hit.level-2 { background: #40c463 !important; }
 .target-cell.hit.level-3 { background: #30a14e !important; }
@@ -24,10 +28,12 @@ html[data-color-mode=dark] .target-cell.hit.level-3 { background: #26a641 !impor
 html[data-color-mode=dark] .target-cell.hit.level-4 { background: #39d353 !important; }
 
 .cell.hit span {
-  color: #fff;
+  color: #1f2328;
   font-weight: 900;
-  text-shadow: 0 1px 2px #000;
+  text-shadow: none;
 }
+.cell.hit.level-3 span,.cell.hit.level-4 span,html[data-color-mode=dark] .cell.hit span { color: #fff; text-shadow: 0 1px 2px #000; }
+.cell.inspectable { cursor: default; }
 
 .cell.unknown {
   background: #d8dee4 !important;
@@ -36,6 +42,7 @@ html[data-color-mode=dark] .target-cell.hit.level-4 { background: #39d353 !impor
 html[data-color-mode=dark] .cell.unknown {
   background: #30363d !important;
 }
+html[data-color-mode=dark] .legend i.unknown { background: #30363d; }
 
 .cell.miss {
   background: var(--panel) !important;
@@ -47,37 +54,43 @@ html[data-color-mode=dark] .cell.unknown {
   font-weight: 800;
 }
 
-.start-hunt {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 32px;
-}
-
-.start-hunt p {
-  max-width: 700px;
-  color: var(--muted);
-  line-height: 1.55;
-}
-
-.target-board {
-  margin-top: 20px;
-}
+.harbour-selection label { display: block; color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+.harbour-range { width: 100%; accent-color: var(--accent); }
+.selection-preview { margin: 22px 0; }
+.selection-actions { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-top: 1px solid var(--border); padding-top: 18px; }
+.selection-actions p { color: var(--muted); margin: 0; }
+.selection-loading { min-height: 280px; display: grid; place-content: center; justify-items: center; }
+.turn-banner { margin-bottom: 18px; }
+.duel-progress { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 24px; }
+.duel-progress>div { display: grid; gap: 7px; padding: 14px; border: 1px solid var(--border); border-radius: 6px; }
+.duel-progress span,.board-title small { color: var(--muted); font-size: 12px; }
+.battle-boards { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.battle-boards article { min-width: 0; }
+.board-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.board-title h2 { margin-bottom: 2px; }
+.battle-boards .contribution-grid.weeks-10 { min-width: 0; }
+.reveal-versus { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; }
+.reveal-versus>strong { color: var(--muted); }
+.reveal-versus article { min-width: 0; }
+.reveal-versus h3 { margin: 5px 0 14px; font-size: 16px; }
+.result.defeat .result-head .eyebrow { color: #cf222e; }
 
 .legend i.unknown {
   background: #d8dee4;
 }
 
 @media (max-width: 760px) {
-  .start-hunt {
-    display: grid;
-  }
+  .selection-actions,.duel-progress { display: grid; grid-template-columns: 1fr; }
+  .selection-actions button { width: 100%; }
+  .battle-boards { grid-template-columns: 1fr; }
+  .battle-boards .contribution-grid.weeks-10,.reveal-versus .contribution-grid.weeks-10 { min-width: 520px; }
+  .enemy-harbour { order: 1; }
+  .player-harbour { order: 2; border-top: 1px solid var(--border); padding-top: 22px; }
+  .target-battle .board-scroll-hint { display: block; }
+  .reveal-versus { grid-template-columns: 1fr; }
+  .reveal-versus>strong { text-align: center; }
+}
 
-  .start-hunt button {
-    width: 100%;
-  }
-
-  .target-battle .board-scroll-hint {
-    display: block;
-  }
+@media (max-width: 420px) {
+  .battle-boards .contribution-grid.weeks-10,.reveal-versus .contribution-grid.weeks-10 { min-width: 460px; }
 }

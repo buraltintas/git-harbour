@@ -1,8 +1,10 @@
 export type Coord={x:number;y:number};
 export type Day={date:string;weekday:number;contributionCount:number;contributionLevel:number};
-export type TargetCell=Coord&{state:'unknown'|'miss'|'hit'|'empty';date?:string;weekday?:number;contributionCount?:number;contributionLevel?:number};
+export type TargetCell=Coord&{state:'unknown'|'miss'|'hit'|'empty'|'target';date?:string;weekday?:number;contributionCount?:number;contributionLevel?:number};
+export type BattleEvent=Coord&{actor:'player'|'ai';result:'hit'|'miss';contributionCount?:number;contributionLevel?:number};
 export type Stats={games:number;wins:number;losses:number;rating:number;shots:number;hits:number;currentStreak:number;longestStreak:number;winRate:number;accuracy:number;averageShotsPerWin:number;rank:string};
-export type Game={id:string;mode:'solo';ruleset:'contribution_targets_v2';status:'battle'|'complete';cells:TargetCell[];targetCount:number;foundCount:number;shots:number;misses:number;accuracy:number;period?:{start:string;end:string};totalContributions?:number;ratingDelta?:number;shareId?:string;stats:Stats};
+export type Period={start:string;end:string};
+export type Game={id:string;mode:'solo';ruleset:'contribution_targets_v2';status:'battle'|'complete';currentTurn:'player'|'ai'|'complete';winner?:'player'|'ai';playerCells:TargetCell[];enemyCells:TargetCell[];playerTargetCount:number;enemyTargetCount:number;playerTargetsHit:number;enemyTargetsHit:number;shots:number;misses:number;accuracy:number;aiShots:number;aiMisses:number;aiAccuracy:number;playerPeriod:Period;enemyPeriod?:Period;ratingDelta?:number;shareId?:string;stats:Stats};
 export type User={login:string;name:string;avatarUrl:string;joinedAt:string;solo:Stats;pvp:Stats;publicProfileUrl:string};
 export type PublicUser={login:string;name:string;avatarUrl:string;joinedAt:string;solo:Stats;pvp:Stats;publicContributionSummary:{total:number;activeDays:number;preview:Day[]};pvpHistory?:PvpHistoryItem[]};
 export type PublicIdentity={login:string;name:string;avatarUrl:string;pvp?:Stats};
