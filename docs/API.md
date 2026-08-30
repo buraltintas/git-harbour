@@ -2,46 +2,47 @@
 
 Private JSON routes require `Authorization: Bearer <GitHarbour application token>`.
 
-## Authentication
+## Authentication and users
 
-- `GET /auth/github/start` creates a hashed 10-minute state and redirects to GitHub with no explicit scope.
-- `GET /auth/github/callback` consumes state, exchanges the GitHub code server-side, imports public data, and redirects with a 90-second exchange code.
-- `POST /auth/exchange {code}` consumes the code and returns `{token,user}`.
-- `POST /auth/logout` revokes the current session.
-- `POST /v1/dev/session` exists only when `APP_ENV` is development/test and `GITHARBOUR_DEV_AUTH=true`.
-
-## Private user and Solo
-
+- `GET /auth/github/start`
+- `GET /auth/github/callback`
+- `POST /auth/exchange {code}`
+- `POST /auth/logout`
+- `POST /v1/dev/session` only in explicit development/test mode
 - `GET /v1/me`
 - `GET /v1/me/contributions`
-- `POST /v1/games/solo {startDate,fleet}`
-- `GET /v1/games/{id}`
-- `POST /v1/games/{id}/shots {x,y}`
 
-Game reads/shots are scoped to the authenticated owner. Requests submit only target intent; hit, AI turn, winner, stats and share are derived server-side.
+## Battle Your History
 
-## Challenge PvP
+- `POST /v1/games/solo {}` selects and freezes a hidden server-chosen window.
+- `GET /v1/games/{id}` reads an owner-scoped game.
+- `POST /v1/games/{id}/shots {x,y}` submits coordinate intent only.
 
-- `POST /v1/challenges` creates a seven-day private link.
-- `GET /v1/public/challenges/{code}` returns its safe state and, when authenticated, allowed actions.
-- `POST /v1/challenges/{code}/accept` atomically claims an open challenge.
-- `POST /v1/challenges/{code}/cancel` lets its creator cancel while open.
-- `POST /v1/challenges/{code}/ready {startDate,fleet}` freezes one player's setup once.
-- `GET /v1/battles` groups active turns, waits, and completed battles.
-- `GET /v1/games/{id}` and `POST /v1/games/{id}/shots {x,y}` dispatch to Solo or PvP without trusting client outcomes.
-- `POST /v1/games/{id}/rematch` creates one idempotent, prior-opponent-only challenge.
+An active response contains summary fields and exactly 70 allow-listed cell projections:
+
+```json
+{"x":2,"y":4,"state":"unknown"}
+{"x":2,"y":5,"state":"miss"}
+{"x":2,"y":6,"state":"hit","contributionCount":14,"contributionLevel":3}
+```
+
+Unknown and missed cells never include date, weekday, contribution count, or contribution level. The active response includes `targetCount`, `foundCount`, `shots`, `misses`, and `accuracy` so the completion objective is clear without revealing positions.
+
+Only a completed response adds `period`, `totalContributions`, `ratingDelta`, `shareId`, and the full dated cell snapshot. A legacy prototype game returns `410 legacy_game_retired` instead of being reinterpreted under new rules.
+
+## PvP transition
+
+Read-only public profile, leaderboard, archived history, and existing challenge records remain available. New challenge creation, acceptance, and readiness return `503 pvp_refit` until contribution-target PvP setup is implemented. This avoids exposing an active mixed-ruleset product.
 
 ## Public
 
-- `GET /v1/public/users/{login}` returns the safe public projection.
-- `GET /v1/public/leaderboards/pvp` returns ranked players with completed PvP games.
-- `GET /u/{login}` returns canonical escaped HTML and real 404 HTML for unknown users.
-- `GET /widgets/{login}.svg?theme=light|dark` returns a 480×140 embeddable SVG.
-- `GET /share/users/{login}.svg` remains an alias for widget compatibility.
-- `GET /s/{shareId}` returns completed-game Open Graph/Twitter HTML.
-- `GET /share/games/{shareId}.png` returns a 1200×630 result card for completed PvP shares.
+- `GET /v1/public/users/{login}`
+- `GET /v1/public/leaderboards/pvp`
+- `GET /u/{login}`
+- `GET /widgets/{login}.svg?theme=light|dark`
+- `GET /share/users/{login}.svg`
+- `GET /s/{shareId}`
+- `GET /share/games/{shareId}.png`
 - `GET /healthz`
 
-Public DTOs never include GitHub tokens, session/auth fields, email, database identifiers, hidden fleets, or unrevealed enemy dates. Errors use `{error:{code,message}}`.
-
-Mutation conflicts use stable codes including `challenge_taken`, `self_challenge`, `setup_locked`, `not_your_turn`, `duplicate_shot`, and `game_complete`. Unknown internal errors are not reflected to clients.
+Public shares exist only for completed games. Errors use `{error:{code,message}}`; hidden internal state, auth values, GitHub tokens, database identifiers, and active periods are never serialized.

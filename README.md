@@ -15,7 +15,7 @@ npm ci
 npm run dev:web
 ```
 
-Open `http://localhost:5173`. Vite development mode exposes Alice and Bob test accounts so a challenge can be exercised in one browser; production builds expose only **Continue with GitHub**. Compose runs versioned migrations once before starting the API. Without Docker, set `APP_ENV=development` and `GITHARBOUR_DEV_AUTH=true`; the API may use its development-only memory repository when `DATABASE_URL` is empty.
+Open `http://localhost:5173`. Vite development mode exposes Alice and Bob test accounts for local Solo/profile testing; production builds expose only **Continue with GitHub**. Compose runs versioned migrations once before starting the API. Without Docker, set `APP_ENV=development` and `GITHARBOUR_DEV_AUTH=true`; the API may use its development-only memory repository when `DATABASE_URL` is empty.
 
 ```bash
 npm test
@@ -30,7 +30,7 @@ cd apps/api && go vet ./...
 3. Use the PostgreSQL Session Pooler connection string for Koyeb's IPv4 network; retain its required `sslmode` settings and percent-encode the password.
 4. Store the connection string only as a Koyeb secret named `DATABASE_URL`.
 5. Run `DATABASE_URL='…' go run ./cmd/migrate up` from `apps/api`, or run the built container once with command `/migrate up`.
-6. Verify `schema_migrations` contains migrations through `004_pvp.sql`.
+6. Verify `schema_migrations` contains migrations through `005_contribution_targets.sql`.
 7. Do not configure Supabase Auth.
 8. Do not expose an anon key, service-role key, connection string, or any Supabase credential to the web build.
 
@@ -98,6 +98,6 @@ The static Pages/Koyeb split prevents a same-origin httpOnly session cookie. The
 
 ## Developer vs Developer
 
-Choose **Challenge a developer**, copy the private link, and send it to one person. Each player independently freezes a 10-week harbour and fleet. Once both are ready, the server chooses the opening player; turns can be taken asynchronously from **Battles**. Completion updates only PvP Elo/statistics, publishes safe history/share surfaces, and offers an opponent-restricted rematch link.
+Solo starts immediately: **Battle Your History** asks the server to choose a hidden, playable ten-week slice. Every contribution day is one target, every quiet day is a miss, and the exact period is revealed only after all targets are found. New PvP creation is temporarily gated while the preserved challenge/turn/rating infrastructure is moved to the same contribution-target rules.
 
 See [docs/KOYEB.md](docs/KOYEB.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/API.md](docs/API.md), and [docs/GAME_RULES.md](docs/GAME_RULES.md).

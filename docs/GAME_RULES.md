@@ -1,27 +1,34 @@
 # GitHarbour rules
 
-## Board and fleet
+## Board and targets
 
-A battlefield is exactly 10 weeks horizontally by seven weekdays vertically: 70 cells. A snapshot cell contains `date`, `weekday` (0–6), `contributionCount`, and `contributionLevel` (0–4).
+A harbour is exactly ten weeks by seven weekdays: 70 frozen cells. Each internal snapshot cell contains its date, weekday, contribution count, and contribution level.
 
-The fleet is Carrier (5), Battleship (4), Cruiser (3), Submarine (3), and Destroyer (2). Ships are straight, horizontal or vertical, in bounds, and non-overlapping. They may touch.
+- `contributionCount > 0` is one contribution target.
+- `contributionCount == 0` is empty water.
+- One hit clears a target regardless of count or intensity.
+- Contribution level is visual information revealed after a hit and at completion.
 
-## Turns and victory
+There is no manual deployment, orientation, named ship, reciprocal Solo opponent, or client-supplied target pattern.
 
-Opponents alternate one shot per turn. A hit gives no extra shot. A coordinate can be targeted only once. A ship sinks when every coordinate is hit; the first side to sink all five opposing ships wins. Finished games reject further actions.
+## Hidden play and victory
 
-In PvP, the server randomly chooses the opening player only after both immutable setups are locked. A challenge can be accepted once, cannot be self-accepted, expires after seven days, and reveals neither the opposing fleet nor its dates during play. A rematch is a new setup and is reserved for the previous opponent.
+The player submits only a coordinate. An unexplored active cell exposes no date, weekday, count, level, or target state. A hit reveals that cell’s frozen count and level; a miss reveals only a quiet day. Dates remain hidden until completion.
 
-## Solo opponent
+The harbour clears immediately after every contribution target has been hit. Empty cells do not need to be fired upon. Duplicate, out-of-bounds, and post-completion shots are rejected.
 
-The server uses cryptographically secure randomness to choose a valid 10-week starting week from the same normalized history, excluding the player's starting week. Its range remains secret until the terminal result. The server also places its fleet with secure randomness.
+## Solo window selection
 
-## AI knowledge and behavior
+The server enumerates week-aligned, contiguous 70-day windows. It prefers windows containing 10–45 target days and chooses randomly among eligible candidates. If none meet the ideal density, it chooses randomly among the non-empty windows closest to that range. An all-zero history cannot produce a meaningful game and returns a friendly unavailable result.
 
-The AI consumes only prior public shot outcomes, never player coordinates. It hunts among unexplored cells. Following a hit it targets valid orthogonal neighbors; aligned hits establish an orientation and extend along that line until sunk or exhausted. It never repeats a shot.
+The selected snapshot is copied into the game. Later contribution imports cannot mutate active or completed games.
 
-## Authority and integrity
+## Solo performance
 
-The server accepts only intent: harbour start, fleet placement, or target coordinate. It validates placement, locks the game during a turn, derives hit/miss/sunk/victory, executes the AI response, and updates terminal ratings/statistics once in the same transaction. Hidden enemy fleet coordinates are never serialized in client projections.
+Solo has no loss race or shot budget. A completion records targets, shots, misses, accuracy, total contributions, and rating delta exactly once. The density-aware rating delta is based on the expected location of the last target in a random ordering, scaled by three and bounded to −12…+12.
 
-Solo and PvP ratings/statistics are independent. A PvP result calculates both Elo changes from the two unchanged pre-match ratings, persists the two result rows atomically, and exposes only completed history publicly.
+## Future PvP
+
+Each player will choose an eligible ten-week contribution slice. One shot is taken per turn, including after a hit. The first player to find every target on the opponent’s board wins. Exact periods remain hidden until the game completes. The same default 10–45 target quality range applies to both players.
+
+Legacy `fleet_v1` prototype games remain distinguishable in persistence and are not compatible with the `contribution_targets_v2` ruleset.

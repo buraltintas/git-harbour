@@ -14,7 +14,7 @@ The Pages architecture requires storing the GitHarbour token in browser local st
 
 ## Persistence and concurrency
 
-Production requires `DATABASE_URL`; config uses `pgxpool.ParseConfig`, with conservative configurable limits. Migrations run explicitly via `cmd/migrate`, never during instance startup. Solo and PvP shot transactions lock the game before resolving intent. PvP also locks both statistics rows at completion, calculates both outcomes from pre-match ratings, writes normalized shots/results and the unique share, then commits once. Duplicate concurrent accepts and shots serialize; only one state transition wins.
+Production requires `DATABASE_URL`; config uses `pgxpool.ParseConfig`, with conservative configurable limits. Migrations run explicitly via `cmd/migrate`, never during instance startup. Solo shot transactions lock the game and Solo statistics before resolving coordinate intent; terminal stats and the unique share commit once. The immutable contribution snapshot lives in persisted game state, so refreshed imports cannot alter a match. PvP locking infrastructure remains preserved for its contribution-target refit.
 
 The memory repository and mock calendar exist only in development/test with explicit dev auth. Production startup fails for missing/unreachable PostgreSQL or missing auth/game schema.
 
@@ -24,14 +24,14 @@ The memory repository and mock calendar exist only in development/test with expl
 - `github_identities`: durable unique numeric GitHub ID; no OAuth token column after migration 002.
 - `contribution_days`: normalized public date/count/level data refreshed at login.
 - `oauth_states`, `login_exchange_codes`, `auth_sessions`: hashed authentication credentials with expiry/consumption/revocation.
-- `games`: mode/lifecycle, opening/current/winning player and Solo authoritative state.
-- `game_players`: two immutable PvP board/fleet snapshots, selected periods, readiness and shot views.
-- `pvp_shots`, `pvp_results`: normalized turns and one immutable terminal result per participant.
+- `games`: mode/lifecycle, explicit `fleet_v1` or `contribution_targets_v2` ruleset, and authoritative frozen Solo state.
+- `game_players`: two immutable future PvP contribution snapshots, selected periods and readiness; the legacy fleet column remains only for archived prototype rows.
+- `pvp_shots`, `pvp_results`: archived normalized prototype records plus additive contribution reveal/target-stat fields for the next PvP phase.
 - `mode_stats`: independent Solo/PvP rows.
 - `challenges`: challenge-link preparation only.
 - `shares`: stable unique public result ID per completed game.
 
-Contribution refresh never touches snapshots inside existing games. Hidden enemy fleet/date state exists in database JSON but is removed from browser projections until completion.
+Contribution refresh never touches snapshots inside existing games. Active target-game responses are constructed from an allow-list: unknown and missed cells expose no dates, counts, levels, or target flags. The full period and snapshot are projected only after completion. Existing pre-pivot games are marked `fleet_v1` and return an explicit retired-game response rather than being silently reinterpreted.
 
 ## Public and deployment surfaces
 
