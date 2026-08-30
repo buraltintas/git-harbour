@@ -27,7 +27,9 @@ The memory repository and mock calendar exist only in development/test with expl
 - `games`: mode/lifecycle, explicit `fleet_v1` or `contribution_targets_v2` ruleset, and authoritative frozen Solo state.
 - `game_players`: two immutable future PvP contribution snapshots, selected periods and readiness; the legacy fleet column remains only for archived prototype rows.
 - `pvp_shots`, `pvp_results`: archived normalized prototype records plus additive contribution reveal/target-stat fields for the next PvP phase.
-- `mode_stats`: independent Solo/PvP rows.
+- `mode_stats`: preserved pre-pivot Solo counters and current PvP statistics.
+- `legacy_mode_stats`: immutable copy of pre-pivot Solo counters.
+- `ruleset_mode_stats`: independent contribution-target Solo counters keyed by ruleset, leaving existing statistics untouched.
 - `challenges`: challenge-link preparation only.
 - `shares`: stable unique public result ID per completed game.
 

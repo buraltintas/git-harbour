@@ -18,4 +18,4 @@ The existing challenge, participant, turn, Elo, history, and leaderboard infrast
 
 GitHub OAuth, application sessions, contribution import, Supabase PostgreSQL/pgx, public profiles, separate Solo/PvP stats, stable share IDs, canonical HTML, README widgets, social cards, GitHub Pages, Koyeb deployment, Primer styling, and authorization boundaries remain intact.
 
-The separate prototype fleet mechanic was replaced before public launch. No new game accepts ship coordinates or a client-selected Solo date range.
+The separate prototype fleet mechanic was replaced before public launch. No new game accepts ship coordinates or a client-selected Solo date range. Pre-pivot Solo counters are preserved unchanged in `mode_stats` and copied to `legacy_mode_stats`; new Solo performance lives separately in `ruleset_mode_stats`, so old victories are never mislabeled as completed history hunts.

@@ -12,9 +12,9 @@ import (
 )
 
 func TestPostgresPersistenceAndConcurrentShot(t *testing.T) {
-	url := os.Getenv("DATABASE_URL")
+	url := os.Getenv("GITHARBOUR_INTEGRATION_DATABASE_URL")
 	if url == "" {
-		t.Skip("DATABASE_URL not set; live PostgreSQL integration not run")
+		t.Skip("GITHARBOUR_INTEGRATION_DATABASE_URL not set; isolated PostgreSQL integration not run")
 	}
 	ctx := context.Background()
 	cfg, err := pgxpool.ParseConfig(url)
@@ -39,18 +39,8 @@ func TestPostgresPersistenceAndConcurrentShot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fleet := []game.Ship{}
-	for y, spec := range []struct {
-		Name string
-		Size int
-	}{{"Carrier", 5}, {"Battleship", 4}, {"Cruiser", 3}, {"Submarine", 3}, {"Destroyer", 2}} {
-		cells := []game.Coord{}
-		for x := 0; x < spec.Size; x++ {
-			cells = append(cells, game.Coord{X: x, Y: y})
-		}
-		fleet = append(fleet, game.Ship{Kind: spec.Name, Cells: cells})
-	}
-	g := &State{ID: uuid(), Status: "battle", Turn: "player", PlayerStart: "2025-01-01", EnemyStart: "2025-04-01", PlayerFleet: fleet, EnemyFleet: fleet, PlayerShots: []game.Shot{}, AIShots: []game.Shot{}, Stats: decorate(PublicStats{Rating: 1200})}
+	board := mockCells(time.Now())[:70]
+	g := &State{ID: uuid(), Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", Board: board, Shots: []game.TargetShot{}, PeriodStart: board[0].Date, TargetCount: game.TargetCount(board), Stats: decorate(PublicStats{Rating: 1200})}
 	if err = repo.CreateGame(ctx, u.ID, g); err != nil {
 		t.Fatal(err)
 	}
@@ -82,9 +72,9 @@ func TestPostgresPersistenceAndConcurrentShot(t *testing.T) {
 }
 
 func TestPostgresConcurrentChallengeAcceptance(t *testing.T) {
-	url := os.Getenv("DATABASE_URL")
+	url := os.Getenv("GITHARBOUR_INTEGRATION_DATABASE_URL")
 	if url == "" {
-		t.Skip("DATABASE_URL not set; live PostgreSQL integration not run")
+		t.Skip("GITHARBOUR_INTEGRATION_DATABASE_URL not set; isolated PostgreSQL integration not run")
 	}
 	ctx := context.Background()
 	cfg, e := pgxpool.ParseConfig(url)
@@ -144,9 +134,9 @@ func TestPostgresConcurrentChallengeAcceptance(t *testing.T) {
 }
 
 func TestPostgresPVPFullLifecycleAndTerminalRace(t *testing.T) {
-	url := os.Getenv("DATABASE_URL")
+	url := os.Getenv("GITHARBOUR_INTEGRATION_DATABASE_URL")
 	if url == "" {
-		t.Skip("DATABASE_URL not set; live PostgreSQL integration not run")
+		t.Skip("GITHARBOUR_INTEGRATION_DATABASE_URL not set; isolated PostgreSQL integration not run")
 	}
 	ctx := context.Background()
 	cfg, err := pgxpool.ParseConfig(url)

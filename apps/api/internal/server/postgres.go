@@ -77,6 +77,9 @@ func (p *PostgresRepository) UpsertGitHubUser(ctx context.Context, u User, days 
 	if _, e = tx.Exec(ctx, `INSERT INTO mode_stats(user_id,mode) VALUES($1,'solo'),($1,'pvp') ON CONFLICT DO NOTHING`, id); e != nil {
 		return User{}, e
 	}
+	if _, e = tx.Exec(ctx, `INSERT INTO ruleset_mode_stats(user_id,mode,ruleset) VALUES($1,'solo','contribution_targets_v2') ON CONFLICT DO NOTHING`, id); e != nil {
+		return User{}, e
+	}
 	if e = tx.Commit(ctx); e != nil {
 		return User{}, e
 	}
@@ -161,6 +164,9 @@ func scanStats(row pgx.Row) (PublicStats, error) {
 	return decorate(s), e
 }
 func (p *PostgresRepository) Stats(ctx context.Context, uid, mode string) (PublicStats, error) {
+	if mode == "solo" {
+		return scanStats(p.pool.QueryRow(ctx, `SELECT games,wins,losses,rating,shots,hits,current_streak,longest_streak,win_shots FROM ruleset_mode_stats WHERE user_id=$1 AND mode='solo' AND ruleset='contribution_targets_v2'`, uid))
+	}
 	return scanStats(p.pool.QueryRow(ctx, `SELECT games,wins,losses,rating,shots,hits,current_streak,longest_streak,win_shots FROM mode_stats WHERE user_id=$1 AND mode=$2`, uid, mode))
 }
 func (p *PostgresRepository) PublicUser(ctx context.Context, login string) (PublicUser, error) {
@@ -254,7 +260,7 @@ func (p *PostgresRepository) Shoot(ctx context.Context, uid, id string, c game.C
 		return nil, nil, e
 	}
 	g.Ruleset = ruleset
-	s, e := scanStats(tx.QueryRow(ctx, `SELECT games,wins,losses,rating,shots,hits,current_streak,longest_streak,win_shots FROM mode_stats WHERE user_id=$1 AND mode='solo' FOR UPDATE`, uid))
+	s, e := scanStats(tx.QueryRow(ctx, `SELECT games,wins,losses,rating,shots,hits,current_streak,longest_streak,win_shots FROM ruleset_mode_stats WHERE user_id=$1 AND mode='solo' AND ruleset='contribution_targets_v2' FOR UPDATE`, uid))
 	if e != nil {
 		return nil, nil, e
 	}
@@ -267,7 +273,7 @@ func (p *PostgresRepository) Shoot(ctx context.Context, uid, id string, c game.C
 		return nil, nil, e
 	}
 	if g.TerminalApplied {
-		if _, e = tx.Exec(ctx, `UPDATE mode_stats SET games=$2,wins=$3,losses=$4,rating=$5,shots=$6,hits=$7,current_streak=$8,longest_streak=$9,win_shots=$10 WHERE user_id=$1 AND mode='solo'`, uid, updated.Games, updated.Wins, updated.Losses, updated.Rating, updated.Shots, updated.Hits, updated.CurrentStreak, updated.LongestStreak, updated.WinShots); e != nil {
+		if _, e = tx.Exec(ctx, `UPDATE ruleset_mode_stats SET games=$2,wins=$3,losses=$4,rating=$5,shots=$6,hits=$7,current_streak=$8,longest_streak=$9,win_shots=$10 WHERE user_id=$1 AND mode='solo' AND ruleset='contribution_targets_v2'`, uid, updated.Games, updated.Wins, updated.Losses, updated.Rating, updated.Shots, updated.Hits, updated.CurrentStreak, updated.LongestStreak, updated.WinShots); e != nil {
 			return nil, nil, e
 		}
 		if _, e = tx.Exec(ctx, `INSERT INTO shares(id,game_id) VALUES($1,$2) ON CONFLICT(game_id) DO NOTHING`, g.ShareID, id); e != nil {
