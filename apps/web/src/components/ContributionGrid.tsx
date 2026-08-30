@@ -1,3 +1,41 @@
-import{useState}from'react';import type{Day,Ship,Shot}from'../types';
-type Props={days:Day[];weeks?:number;selection?:number;onSelectWeek?:(n:number)=>void;ships?:Ship[];shots?:Shot[];onCell?:(x:number,y:number)=>void;interactive?:boolean;hideDates?:boolean;label:string};
-export function ContributionGrid({days,weeks=10,selection,onSelectWeek,ships=[],shots=[],onCell,interactive,hideDates,label}:Props){const[active,setActive]=useState(0);const shipCells=new Map(ships.flatMap(s=>s.cells.map(c=>[`${c.x}:${c.y}`,s.kind])));const shotCells=new Map(shots.map(s=>[`${s.x}:${s.y}`,s]));const totalWeeks=Math.floor(days.length/7),operable=!!interactive||!!onSelectWeek;const firstAvailable=interactive?days.findIndex((_,i)=>!shotCells.has(`${Math.floor(i/7)}:${i%7}`)):0;const focusIndex=interactive&&shotCells.has(`${Math.floor(active/7)}:${active%7}`)?Math.max(0,firstAvailable):active;function move(event:React.KeyboardEvent<HTMLButtonElement>,i:number){const x=Math.floor(i/7),y=i%7;let next=i;if(event.key==='ArrowRight')next=Math.min(days.length-1,(x+1)*7+y);else if(event.key==='ArrowLeft')next=Math.max(0,(x-1)*7+y);else if(event.key==='ArrowDown')next=Math.min(days.length-1,i+1);else if(event.key==='ArrowUp')next=Math.max(0,i-1);else return;event.preventDefault();while(interactive&&shotCells.has(`${Math.floor(next/7)}:${next%7}`)){if(next===i)return;next=event.key==='ArrowRight'||event.key==='ArrowDown'?Math.min(days.length-1,next+1):Math.max(0,next-1)}setActive(next);(event.currentTarget.parentElement?.children[next] as HTMLElement)?.focus()}return <div className="calendar-wrap"><div className={`contribution-grid weeks-${weeks}`} role="grid" aria-label={label} style={{gridTemplateColumns:`repeat(${totalWeeks}, minmax(0, 1fr))`}}>{days.map((d,i)=>{const x=Math.floor(i/7),y=i%7,k=`${x}:${y}`,shot=shotCells.get(k),ship=shipCells.get(k),selected=selection!==undefined&&x>=selection&&x<selection+10,unavailable=!!interactive&&!!shot;const title=hideDates?`Week ${x+1}, weekday ${y+1}`:`${d.date}: ${d.contributionCount} contributions`;const state=shot?.result||(ship?'ship':'');return <button key={i} type="button" role="gridcell" className={`cell level-${d.contributionLevel} ${selected?'selected':''} ${state}`} aria-label={`${title}${state?`, ${state}${shot?.ship?` ${shot.ship}`:''}`:''}`} title={title} onFocus={()=>setActive(i)} onKeyDown={e=>move(e,i)} tabIndex={operable&&!unavailable?(i===focusIndex?0:-1):-1} onClick={()=>interactive?onCell?.(x,y):onSelectWeek?.(Math.min(42,x))} disabled={!operable||unavailable}><span aria-hidden="true">{shot?(shot.result==='miss'?'•':'×'):ship?'■':''}</span></button>})}</div></div>}
+import {useMemo,useState} from 'react';
+import type {Day,TargetCell} from '../types';
+
+type Props={days?:Day[];cells?:TargetCell[];weeks?:number;onCell?:(x:number,y:number)=>void;interactive?:boolean;label:string;busy?:boolean};
+
+export function ContributionGrid({days,cells,weeks=10,onCell,interactive,label,busy}:Props){
+  const[active,setActive]=useState(0);
+  const items=useMemo<TargetCell[]>(()=>cells||days?.map((d,i)=>({x:Math.floor(i/7),y:i%7,state:d.contributionCount>0?'hit':'empty',...d}))||[],[cells,days]);
+  const operable=!!interactive;
+  const available=(i:number)=>operable&&items[i]?.state==='unknown'&&!busy;
+  const firstAvailable=items.findIndex((_,i)=>available(i));
+  const focusIndex=available(active)?active:Math.max(0,firstAvailable);
+  function move(event:React.KeyboardEvent<HTMLButtonElement>,i:number){
+    const x=Math.floor(i/7),y=i%7;
+    let next=i;
+    if(event.key==='ArrowRight')next=Math.min(items.length-1,(x+1)*7+y);
+    else if(event.key==='ArrowLeft')next=Math.max(0,(x-1)*7+y);
+    else if(event.key==='ArrowDown')next=Math.min(items.length-1,i+1);
+    else if(event.key==='ArrowUp')next=Math.max(0,i-1);
+    else return;
+    event.preventDefault();
+    const direction=event.key==='ArrowRight'||event.key==='ArrowDown'?1:-1;
+    while(operable&&!available(next)&&next!==i){
+      const candidate=next+direction;
+      if(candidate<0||candidate>=items.length)break;
+      next=candidate;
+    }
+    setActive(next);
+    const target=event.currentTarget.parentElement?.children[next] as HTMLElement|undefined;
+    target?.focus();target?.scrollIntoView({block:'nearest',inline:'nearest'});
+  }
+  return <div className="calendar-wrap"><div className={`contribution-grid weeks-${weeks}`} role="grid" aria-label={label} aria-busy={busy} style={{gridTemplateColumns:`repeat(${Math.max(1,Math.ceil(items.length/7))}, minmax(0, 1fr))`}}>{items.map((cell,i)=>{
+    const state=cell.state;
+    const level=state==='hit'?(cell.contributionLevel||1):0;
+    const coordinate=`Week ${cell.x+1}, weekday ${cell.y+1}`;
+    const detail=cell.date?`${cell.date}, ${cell.contributionCount||0} contributions${state==='hit'?`, level ${cell.contributionLevel||1}`:''}`:state==='unknown'?'unexplored':state==='miss'?'quiet day':`contribution found, ${cell.contributionCount||0} contributions, level ${cell.contributionLevel||1}`;
+    const title=cell.date?`${cell.date}: ${cell.contributionCount||0} contributions`:`${coordinate}: ${detail}`;
+    const enabled=available(i);
+    return <button key={`${cell.x}:${cell.y}`} type="button" role="gridcell" className={`cell target-cell level-${level} ${state}`} aria-label={`${coordinate}, ${detail}`} title={title} onFocus={()=>setActive(i)} onKeyDown={e=>move(e,i)} tabIndex={operable&&enabled?(i===focusIndex?0:-1):-1} onClick={()=>enabled&&onCell?.(cell.x,cell.y)} disabled={!enabled}><span aria-hidden="true">{state==='hit'?'✓':state==='miss'?'•':''}</span></button>
+  })}</div></div>
+}

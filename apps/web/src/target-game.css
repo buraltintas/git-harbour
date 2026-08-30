@@ -1,0 +1,83 @@
+.app,
+.app h1,
+.app h2,
+.app h3,
+.app strong,
+.status,
+.rating,
+.panel {
+  color: var(--text);
+}
+
+.cell.hit {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, #fff 70%, transparent);
+  animation: hit .2s ease-out;
+}
+
+.target-cell.hit.level-1 { background: #9be9a8 !important; }
+.target-cell.hit.level-2 { background: #40c463 !important; }
+.target-cell.hit.level-3 { background: #30a14e !important; }
+.target-cell.hit.level-4 { background: #216e39 !important; }
+html[data-color-mode=dark] .target-cell.hit.level-1 { background: #0e4429 !important; }
+html[data-color-mode=dark] .target-cell.hit.level-2 { background: #006d32 !important; }
+html[data-color-mode=dark] .target-cell.hit.level-3 { background: #26a641 !important; }
+html[data-color-mode=dark] .target-cell.hit.level-4 { background: #39d353 !important; }
+
+.cell.hit span {
+  color: #fff;
+  font-weight: 900;
+  text-shadow: 0 1px 2px #000;
+}
+
+.cell.unknown {
+  background: #d8dee4 !important;
+}
+
+html[data-color-mode=dark] .cell.unknown {
+  background: #30363d !important;
+}
+
+.cell.miss {
+  background: var(--panel) !important;
+  box-shadow: inset 0 0 0 2px #57606a;
+}
+
+.cell.miss span {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.start-hunt {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 32px;
+}
+
+.start-hunt p {
+  max-width: 700px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.target-board {
+  margin-top: 20px;
+}
+
+.legend i.unknown {
+  background: #d8dee4;
+}
+
+@media (max-width: 760px) {
+  .start-hunt {
+    display: grid;
+  }
+
+  .start-hunt button {
+    width: 100%;
+  }
+
+  .target-battle .board-scroll-hint {
+    display: block;
+  }
+}
