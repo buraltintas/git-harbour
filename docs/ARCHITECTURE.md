@@ -14,7 +14,7 @@ The Pages architecture requires storing the GitHarbour token in browser local st
 
 ## Persistence and concurrency
 
-Production requires `DATABASE_URL`; config uses `pgxpool.ParseConfig`, with conservative configurable limits. Migrations run explicitly via `cmd/migrate`, never during instance startup. Solo shot transactions lock the game and Solo statistics before resolving coordinate intent; terminal stats and the unique share commit once. The immutable contribution snapshot lives in persisted game state, so refreshed imports cannot alter a match. PvP locking infrastructure remains preserved for its contribution-target refit.
+Production requires `DATABASE_URL`; config uses `pgxpool.ParseConfig`, with conservative configurable limits. Migrations run explicitly via `cmd/migrate`, never during instance startup, and startup requires the reciprocal Solo migration marker. Solo shot transactions lock the game and Solo statistics before atomically resolving the player shot and one AI response; concurrent duplicate requests cannot create an extra AI turn. Terminal stats and the unique share commit once. Both immutable contribution snapshots live in persisted game state, so refreshed imports cannot alter a match.
 
 The memory repository and mock calendar exist only in development/test with explicit dev auth. Production startup fails for missing/unreachable PostgreSQL or missing auth/game schema.
 
@@ -28,12 +28,12 @@ The memory repository and mock calendar exist only in development/test with expl
 - `game_players`: two immutable future PvP contribution snapshots, selected periods and readiness; the legacy fleet column remains only for archived prototype rows.
 - `pvp_shots`, `pvp_results`: archived normalized prototype records plus additive contribution reveal/target-stat fields for the next PvP phase.
 - `mode_stats`: preserved pre-pivot Solo counters and current PvP statistics.
-- `legacy_mode_stats`: immutable copy of pre-pivot Solo counters.
-- `ruleset_mode_stats`: independent contribution-target Solo counters keyed by ruleset, leaving existing statistics untouched.
+- `legacy_mode_stats`: immutable copies of pre-pivot fleet counters and temporary one-sided v2 history-hunt counters.
+- `ruleset_mode_stats`: reciprocal contribution-target Solo W/L, player accuracy, streak, and Elo counters keyed by ruleset.
 - `challenges`: challenge-link preparation only.
 - `shares`: stable unique public result ID per completed game.
 
-Contribution refresh never touches snapshots inside existing games. Active target-game responses are constructed from an allow-list: unknown and missed cells expose no dates, counts, levels, or target flags. The full period and snapshot are projected only after completion. Existing pre-pivot games are marked `fleet_v1` and return an explicit retired-game response rather than being silently reinterpreted.
+Contribution refresh never touches snapshots inside existing games. The owner may see their chosen Player Harbour. Active Enemy Harbour responses are constructed from an allow-list: unknown and missed cells expose no dates, counts, levels, or target flags. The full enemy period and snapshot are projected only after completion. Existing fleet and one-sided games return an explicit retired-game response rather than being silently reinterpreted.
 
 ## Public and deployment surfaces
 

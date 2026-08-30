@@ -30,7 +30,7 @@ cd apps/api && go vet ./...
 3. Use the PostgreSQL Session Pooler connection string for Koyeb's IPv4 network; retain its required `sslmode` settings and percent-encode the password.
 4. Store the connection string only as a Koyeb secret named `DATABASE_URL`.
 5. Run `DATABASE_URL='…' go run ./cmd/migrate up` from `apps/api`, or run the built container once with command `/migrate up`.
-6. Verify `schema_migrations` contains migrations through `006_archive_prototype_solo_stats.sql`.
+6. Verify `schema_migrations` contains migrations through `007_reciprocal_solo_stats.sql`.
 7. Do not configure Supabase Auth.
 8. Do not expose an anon key, service-role key, connection string, or any Supabase credential to the web build.
 
@@ -98,6 +98,6 @@ The static Pages/Koyeb split prevents a same-origin httpOnly session cookie. The
 
 ## Developer vs Developer
 
-Solo starts immediately: **Battle Your History** asks the server to choose a hidden, playable ten-week slice. Every contribution day is one target, every quiet day is a miss, and the exact period is revealed only after all targets are found. New PvP creation is temporarily gated while the preserved challenge/turn/rating infrastructure is moved to the same contribution-target rules.
+Solo is reciprocal: **Battle Your History** lets the player choose a ten-week contribution harbour, then the server matches a fair, different hidden period from the same history. Player and AI trade exactly one shot; the first to find every opposing contribution day wins. New PvP creation remains gated while the preserved challenge infrastructure is moved to these same two-harbour rules.
 
 See [docs/KOYEB.md](docs/KOYEB.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/API.md](docs/API.md), and [docs/GAME_RULES.md](docs/GAME_RULES.md).

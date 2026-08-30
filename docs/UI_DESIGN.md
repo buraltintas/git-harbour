@@ -1,23 +1,17 @@
 # UI design
 
-GitHarbour uses Primer controls and tokens with a restrained GitHub-adjacent visual language. Contribution grids are the game, not decorative terrain. There is no neon arcade treatment, fake 3D object, or unnecessary onboarding.
+## Solo journey
 
-## Core Solo flow
+`Dashboard → choose a 10-week Player Harbour → reciprocal two-board battle → Victory/Defeat reveal → share`
 
-`Dashboard → Start a history hunt → concealed 10×7 board → history reveal → share`
+Selection shows the player's real frozen contribution slice, dates, target count, and an explicit range control. There is no deployment or orientation step.
 
-There is no date-range selection or deployment step. The dashboard has one primary action, and the server-selected game begins immediately. The active screen shows one board plus useful progress: targets found, total targets, shots, misses, and accuracy.
+During battle, **Hidden Harbour** is the primary interactive board and **Your Harbour** is the visible defensive board. A compact turn banner says `YOUR TURN` or `THE HISTORY FIRES BACK`. Progress shows remaining target days for both sides. Hits, misses, and contribution intensity reuse the contribution-grid visual language.
 
-Unknown targets and empty cells are visually identical before selection. Hit cells reveal the authentic GitHub-like contribution level with a check glyph; misses use a neutral outlined state and dot. Color is never the only cue. Shot announcements use a polite live region and controls are busy/disabled while a request is in flight.
+Desktop uses two columns. Around 390px the boards stack with Hidden Harbour first so the shooting surface remains primary; each grid scrolls horizontally rather than compressing touch targets.
 
-The result screen reveals the exact period, full frozen contribution slice, target and contribution totals, shots, misses, accuracy, rating change, share action, and another-hunt action. Copy uses “Harbour cleared”, “Contribution found”, and “Quiet day”.
+The result screen says Victory or Defeat and reveals both exact date ranges and both frozen grids. It also shows W/L, player shots, misses, accuracy, rating delta/rank, share action, and another-harbour action.
 
-## Accessibility and responsive behavior
+## Public surfaces
 
-The grid keeps a single roving tab stop, arrow-key navigation, disabled explored cells, coordinate-first accessible labels, visible focus, and reduced-motion support. Active unknown labels contain no hidden dates or contribution values. Approximately 390px layouts retain usable cell sizes through horizontal scrolling rather than squeezing 70 targets into tiny controls.
-
-Light and dark themes must keep unknown/miss separation, contribution-green visibility, glyph contrast, focus rings, and readable status/progress text.
-
-## Public and PvP surfaces
-
-Public profile, README widget, canonical HTML, and Solo shares describe completed history hunts, targets found, shots, and accuracy. PvP history is labeled historical while new challenge/battle UI is gated behind a concise refit state. The challenge, polling, identity, and leaderboard shells remain reusable for the next contribution-target PvP phase.
+Public profile, README widget, canonical HTML, and Solo shares use competitive games, wins, losses, rating, rank, and player accuracy. The Solo share card centers the revealed hidden contribution grid and includes result, both period starts, shots, accuracy, and rating delta. PvP remains labeled historical/refit.

@@ -1,34 +1,44 @@
 # GitHarbour rules
 
-## Board and targets
+## Contribution targets
 
-A harbour is exactly ten weeks by seven weekdays: 70 frozen cells. Each internal snapshot cell contains its date, weekday, contribution count, and contribution level.
+Each harbour is ten weeks by seven weekdays: 70 frozen cells. Every snapshot cell contains its date, weekday, contribution count, and contribution level.
 
-- `contributionCount > 0` is one contribution target.
-- `contributionCount == 0` is empty water.
-- One hit clears a target regardless of count or intensity.
-- Contribution level is visual information revealed after a hit and at completion.
+- `contributionCount > 0` is one hittable target.
+- `contributionCount == 0` is empty water and produces a miss.
+- One hit clears a target regardless of contribution count or intensity.
+- Contribution level is visual only.
+- There are no named ships, orientation controls, or deployment step.
 
-There is no manual deployment, orientation, named ship, reciprocal Solo opponent, or client-supplied target pattern.
+## Reciprocal Solo setup
 
-## Hidden play and victory
+The authenticated player chooses a week-aligned, contiguous ten-week period from their imported GitHub history. The server validates and freezes that period as the Player Harbour. It then chooses a different playable ten-week window from the same history as the AI Harbour.
 
-The player submits only a coordinate. An unexplored active cell exposes no date, weekday, count, level, or target state. A hit reveals that cell’s frozen count and level; a miss reveals only a quiet day. Dates remain hidden until completion.
+If normal 10–45-target player windows exist, selection is limited to that quality range; sparse or unusually dense histories fall back only to windows closest to it. Opponent selection prefers non-overlapping windows within five target days, then minimizes target-count difference and uses secure randomness among exact ties. If no fair non-overlapping period exists, it applies the same closest-density rule across all different windows. Both snapshots are immutable after creation.
 
-The harbour clears immediately after every contribution target has been hit. Empty cells do not need to be fired upon. Duplicate, out-of-bounds, and post-completion shots are rejected.
+## Turn and AI model
 
-## Solo window selection
+The player starts. A transition is authoritative and transactional:
 
-The server enumerates week-aligned, contiguous 70-day windows. It prefers windows containing 10–45 target days and chooses randomly among eligible candidates. If none meet the ideal density, it chooses randomly among the non-empty windows closest to that range. An all-zero history cannot produce a meaningful game and returns a friendly unavailable result.
+1. The player fires one coordinate at the hidden AI Harbour.
+2. If all AI targets are hit, the player wins immediately.
+3. Otherwise the AI selects one coordinate not present in its prior shots and fires at the Player Harbour.
+4. If all player targets are hit, the AI wins; otherwise control returns to the player.
 
-The selected snapshot is copied into the game. Later contribution imports cannot mutate active or completed games.
+A hit never grants an extra shot. The AI selector receives only board dimensions and its previous shot coordinates/results; it never receives either frozen board and cannot inspect hidden targets.
 
-## Solo performance
+## Visibility and completion
 
-Solo has no loss race or shot budget. A completion records targets, shots, misses, accuracy, total contributions, and rating delta exactly once. The density-aware rating delta is based on the expected location of the last target in a random ordering, scaled by three and bounded to −12…+12.
+The player sees their selected harbour, dates, contribution pattern, and AI hit/miss marks during battle. On the AI Harbour, an untouched cell exposes only its coordinate and `unknown` state. A hit reveals frozen contribution count/level and a miss reveals only empty water. Enemy dates and the exact enemy period remain hidden until completion.
+
+The first side to hit all contribution targets on the opposing harbour wins. Empty cells do not need to be explored. Terminal results use `player` or `ai`, reveal both periods, and reject further shots.
+
+## Solo statistics
+
+Completed reciprocal games update games, wins, losses, win rate, current/longest win streak, player shots, player hits, accuracy, and average player shots per win exactly once. AI shots never enter player accuracy. Solo rating uses the existing 32-point Elo helper against a fixed 1200-rated AI.
+
+The migration archives temporary one-sided v2 history-hunt counters before resetting reciprocal Solo statistics to a clean semantic baseline. Legacy `fleet_v1` games remain distinguishable and are never reinterpreted.
 
 ## Future PvP
 
-Each player will choose an eligible ten-week contribution slice. One shot is taken per turn, including after a hit. The first player to find every target on the opponent’s board wins. Exact periods remain hidden until the game completes. The same default 10–45 target quality range applies to both players.
-
-Legacy `fleet_v1` prototype games remain distinguishable in persistence and are not compatible with the `contribution_targets_v2` ruleset.
+Future PvP replaces the AI Harbour with another authenticated developer's selected harbour and replaces the synchronous AI response with the opponent's turn. The two-board contribution-target rules and first-to-find-all-targets win condition remain unchanged.

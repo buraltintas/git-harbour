@@ -14,11 +14,11 @@ Private JSON routes require `Authorization: Bearer <GitHarbour application token
 
 ## Battle Your History
 
-- `POST /v1/games/solo {}` selects and freezes a hidden server-chosen window.
+- `POST /v1/games/solo {playerStart}` validates and freezes the selected Player Harbour, then securely matches a different AI Harbour.
 - `GET /v1/games/{id}` reads an owner-scoped game.
 - `POST /v1/games/{id}/shots {x,y}` submits coordinate intent only.
 
-An active response contains summary fields and exactly 70 allow-listed cell projections:
+An active response contains `playerCells` and `enemyCells`, each with exactly 70 allow-listed projections. The owner receives their fully dated Player Harbour with AI shot marks. The Enemy Harbour uses:
 
 ```json
 {"x":2,"y":4,"state":"unknown"}
@@ -26,9 +26,9 @@ An active response contains summary fields and exactly 70 allow-listed cell proj
 {"x":2,"y":6,"state":"hit","contributionCount":14,"contributionLevel":3}
 ```
 
-Unknown and missed cells never include date, weekday, contribution count, or contribution level. The active response includes `targetCount`, `foundCount`, `shots`, `misses`, and `accuracy` so the completion objective is clear without revealing positions.
+Unknown and missed enemy cells never include date, weekday, contribution count, or contribution level. Active responses include `currentTurn`, both target counts, both hit counts, player `shots`/`misses`/`accuracy`, and separate `aiShots`/`aiMisses`/`aiAccuracy`. A shot response contains one player event and, unless the player wins immediately, exactly one AI response event.
 
-Only a completed response adds `period`, `totalContributions`, `ratingDelta`, `shareId`, and the full dated cell snapshot. A legacy prototype game returns `410 legacy_game_retired` instead of being reinterpreted under new rules.
+Only a completed response adds `enemyPeriod`, `ratingDelta`, `shareId`, `winner: player|ai`, and the full dated enemy snapshot. The selected `playerPeriod` is owner-visible throughout. Legacy fleet games and temporary one-sided v2 games return `410 legacy_game_retired` instead of being reinterpreted.
 
 ## PvP transition
 
