@@ -65,8 +65,12 @@ func (p *PostgresRepository) UpsertGitHubUser(ctx context.Context, u User, days 
 	if _, e = tx.Exec(ctx, `DELETE FROM contribution_days WHERE user_id=$1`, id); e != nil {
 		return User{}, e
 	}
+	rows := make([][]any, 0, len(days))
 	for _, d := range days {
-		if _, e = tx.Exec(ctx, `INSERT INTO contribution_days(user_id,day,contribution_count,contribution_level) VALUES($1,$2,$3,$4)`, id, d.Date, d.ContributionCount, d.ContributionLevel); e != nil {
+		rows = append(rows, []any{id, d.Date, d.ContributionCount, d.ContributionLevel})
+	}
+	if len(rows) > 0 {
+		if _, e = tx.CopyFrom(ctx, pgx.Identifier{"contribution_days"}, []string{"user_id", "day", "contribution_count", "contribution_level"}, pgx.CopyFromRows(rows)); e != nil {
 			return User{}, e
 		}
 	}
