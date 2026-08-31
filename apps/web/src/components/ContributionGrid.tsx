@@ -1,14 +1,14 @@
 import {useMemo,useState} from 'react';
-import type {Day,TargetCell} from '../types';
+import type {Day,FleetCell} from '../types';
 
-type Props={days?:Day[];cells?:TargetCell[];weeks?:number;onCell?:(x:number,y:number)=>void;interactive?:boolean;inspectable?:boolean;label:string;busy?:boolean};
+type Props={days?:Day[];cells?:FleetCell[];weeks?:number;onCell?:(x:number,y:number)=>void;interactive?:boolean;selectable?:boolean;inspectable?:boolean;label:string;busy?:boolean};
 
-export function ContributionGrid({days,cells,weeks=10,onCell,interactive,inspectable,label,busy}:Props){
+export function ContributionGrid({days,cells,weeks=10,onCell,interactive,selectable,inspectable,label,busy}:Props){
   const[active,setActive]=useState(0);
-  const items=useMemo<TargetCell[]>(()=>cells||days?.map((d,i)=>({x:Math.floor(i/7),y:i%7,state:d.contributionCount>0?'hit':'empty',...d}))||[],[cells,days]);
-  const operable=!!interactive;
+  const items=useMemo<FleetCell[]>(()=>cells||days?.map((d,i)=>({x:Math.floor(i/7),y:i%7,state:d.contributionCount>0?'eligible':'empty',...d}))||[],[cells,days]);
+  const operable=!!interactive||!!selectable;
   const navigable=operable||!!inspectable;
-  const available=(i:number)=>operable&&items[i]?.state==='unknown'&&!busy;
+  const available=(i:number)=>operable&&!busy&&(selectable?['eligible','empty','deployed','reserve','exposed','selected'].includes(items[i]?.state):(['unknown','exposed'].includes(items[i]?.state)&&!items[i]?.targeted));
   const firstAvailable=items.findIndex((_,i)=>available(i));
   const focusIndex=inspectable?active:available(active)?active:Math.max(0,firstAvailable);
   function move(event:React.KeyboardEvent<HTMLButtonElement>,i:number){
@@ -32,11 +32,11 @@ export function ContributionGrid({days,cells,weeks=10,onCell,interactive,inspect
   }
   return <div className="calendar-wrap"><div className={`contribution-grid weeks-${weeks}`} role="grid" aria-label={label} aria-busy={busy} style={{gridTemplateColumns:`repeat(${Math.max(1,Math.ceil(items.length/7))}, minmax(0, 1fr))`}}>{items.map((cell,i)=>{
     const state=cell.state;
-    const level=state==='hit'||state==='target'?(cell.contributionLevel||1):0;
+    const level=cell.combatLevel??cell.contributionLevel??0;
     const coordinate=`Week ${cell.x+1}, weekday ${cell.y+1}`;
-    const detail=cell.date?`${cell.date}, ${cell.contributionCount||0} contributions${cell.contributionCount?`, level ${cell.contributionLevel||1}`:''}${state==='hit'?', hit by AI':state==='miss'?', quiet day targeted by AI':''}`:state==='unknown'?'unexplored':state==='miss'?'quiet day':`contribution found, ${cell.contributionCount||0} contributions, level ${cell.contributionLevel||1}`;
+    const detail=cell.date?`${cell.date}, ${cell.contributionCount||0} contributions${cell.unitKind?`, ${cell.unitKind} unit, combat level ${cell.combatLevel}`:''}${state==='eliminated'?', eliminated':state==='exposed'?', exposed':state==='miss'?', targeted miss':''}`:state==='unknown'?'unexplored':state==='miss'?'targeted miss':state==='eliminated'?'eliminated unit':state==='exposed'?`exposed unit, combat level ${cell.combatLevel}`:'empty water';
     const title=cell.date?`${cell.date}: ${cell.contributionCount||0} contributions`:`${coordinate}: ${detail}`;
     const enabled=available(i);
-    return <button key={`${cell.x}:${cell.y}`} type="button" role="gridcell" className={`cell target-cell level-${level} ${state}${inspectable?' inspectable':''}`} aria-label={`${coordinate}, ${detail}`} aria-disabled={!enabled} title={title} onFocus={()=>setActive(i)} onKeyDown={e=>move(e,i)} tabIndex={navigable&&(inspectable||enabled)?(i===focusIndex?0:-1):-1} onClick={()=>enabled&&onCell?.(cell.x,cell.y)} disabled={!enabled&&!inspectable}><span aria-hidden="true">{state==='hit'?'✓':state==='miss'?'•':''}</span></button>
+    return <button key={`${cell.x}:${cell.y}`} type="button" role="gridcell" className={`cell target-cell level-${level} ${state}${inspectable?' inspectable':''}`} aria-label={`${coordinate}, ${detail}`} aria-disabled={!enabled} aria-selected={state==='selected'||undefined} title={title} onFocus={()=>setActive(i)} onKeyDown={e=>move(e,i)} tabIndex={navigable&&(inspectable||enabled)?(i===focusIndex?0:-1):-1} onClick={()=>enabled&&onCell?.(cell.x,cell.y)} disabled={!enabled&&!inspectable}><span aria-hidden="true">{state==='eliminated'?'×':state==='deployed'||state==='reserve'||state==='selected'?'◆':state==='exposed'?'!':state==='miss'?'•':''}</span></button>
   })}</div></div>
 }

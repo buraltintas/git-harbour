@@ -9,7 +9,7 @@
   color: var(--text);
 }
 
-.cell.hit {
+.cell.deployed,.cell.selected,.cell.reserve,.cell.exposed,.cell.eliminated {
   box-shadow: inset 0 0 0 2px color-mix(in srgb, #fff 70%, transparent);
   animation: hit .2s ease-out;
 }
@@ -34,6 +34,15 @@ html[data-color-mode=dark] .target-cell.hit.level-4 { background: #39d353 !impor
 }
 .cell.hit.level-3 span,.cell.hit.level-4 span,html[data-color-mode=dark] .cell.hit span { color: #fff; text-shadow: 0 1px 2px #000; }
 .cell.inspectable { cursor: default; }
+.cell.eligible,.cell.deployed,.cell.selected,.cell.exposed { background: #9be9a8 !important; }
+.cell.level-2.eligible,.cell.level-2.deployed,.cell.level-2.selected,.cell.level-2.exposed { background: #40c463 !important; }
+.cell.level-3.eligible,.cell.level-3.deployed,.cell.level-3.selected,.cell.level-3.exposed,.cell.level-4.eligible,.cell.level-4.deployed,.cell.level-4.selected,.cell.level-4.exposed { background: #216e39 !important; color: #fff; }
+.cell.selected { outline: 3px solid #0969da; outline-offset: 2px; }
+.cell.reserve { background: #bf8700 !important; color: #fff; }
+.cell.exposed { box-shadow: inset 0 0 0 3px #fb8f44; }
+.cell.eliminated { background: #cf222e !important; color: #fff; opacity: .78; }
+.cell.locked { opacity: .55; cursor: not-allowed; }
+.cell.unknown[aria-disabled="true"] { opacity: .7; }
 
 .cell.unknown {
   background: #d8dee4 !important;
@@ -59,7 +68,12 @@ html[data-color-mode=dark] .legend i.unknown { background: #30363d; }
 .selection-preview { margin: 22px 0; }
 .selection-actions { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-top: 1px solid var(--border); padding-top: 18px; }
 .selection-actions p { color: var(--muted); margin: 0; }
+.selection-actions .selection-warning { color: #cf222e; margin-top: 8px; font-weight: 600; }
 .selection-loading { min-height: 280px; display: grid; place-content: center; justify-items: center; }
+.strength-preview,.result-comparison { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin: 18px 0; }
+.strength-preview>div,.result-comparison>div { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--canvas); }
+.strength-preview span,.result-comparison span { color: var(--muted); font-size: 12px; }
+.strength-preview strong,.result-comparison strong { font-size: 15px; }
 .turn-banner { margin-bottom: 18px; }
 .duel-progress { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 24px; }
 .duel-progress>div { display: grid; gap: 7px; padding: 14px; border: 1px solid var(--border); border-radius: 6px; }
@@ -81,6 +95,7 @@ html[data-color-mode=dark] .legend i.unknown { background: #30363d; }
 
 @media (max-width: 760px) {
   .selection-actions,.duel-progress { display: grid; grid-template-columns: 1fr; }
+  .strength-preview,.result-comparison { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .selection-actions button { width: 100%; }
   .battle-boards { grid-template-columns: 1fr; }
   .battle-boards .contribution-grid.weeks-10,.reveal-versus .contribution-grid.weeks-10 { min-width: 520px; }
