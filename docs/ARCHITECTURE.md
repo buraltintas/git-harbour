@@ -14,7 +14,7 @@ The Pages architecture requires storing the GitHarbour token in browser local st
 
 ## Persistence and concurrency
 
-Production requires `DATABASE_URL`; config uses `pgxpool.ParseConfig`, with conservative configurable limits. Migrations run explicitly via `cmd/migrate`, never during instance startup, and startup requires the reciprocal Solo migration marker. Solo shot transactions lock the game and Solo statistics before atomically resolving the player shot and one AI response; concurrent duplicate requests cannot create an extra AI turn. Terminal stats and the unique share commit once. Both immutable contribution snapshots live in persisted game state, so refreshed imports cannot alter a match.
+Production requires `DATABASE_URL`; config uses `pgxpool.ParseConfig`, with conservative configurable limits. Migrations run explicitly via `cmd/migrate`, never during instance startup, and startup requires migration 008. Deployment and combat transactions lock the game; combat also locks v3 Solo statistics before atomically resolving the player action and, unless terminal, one computer response. Concurrent duplicates cannot create an extra turn. Terminal stats and the unique share commit once. Both immutable snapshots, deployments, exposure/elimination flags, probabilities, and rolls live in persisted game state, so refreshed imports cannot alter a match.
 
 The memory repository and mock calendar exist only in development/test with explicit dev auth. Production startup fails for missing/unreachable PostgreSQL or missing auth/game schema.
 
@@ -24,16 +24,16 @@ The memory repository and mock calendar exist only in development/test with expl
 - `github_identities`: durable unique numeric GitHub ID; no OAuth token column after migration 002.
 - `contribution_days`: normalized public date/count/level data refreshed at login.
 - `oauth_states`, `login_exchange_codes`, `auth_sessions`: hashed authentication credentials with expiry/consumption/revocation.
-- `games`: mode/lifecycle, explicit `fleet_v1` or `contribution_targets_v2` ruleset, and authoritative frozen Solo state.
+- `games`: mode/lifecycle, explicit `fleet_v1`, `contribution_targets_v2`, or active `contribution_fleet_v3` ruleset, and authoritative frozen Solo state.
 - `game_players`: two immutable future PvP contribution snapshots, selected periods and readiness; the legacy fleet column remains only for archived prototype rows.
 - `pvp_shots`, `pvp_results`: archived normalized prototype records plus additive contribution reveal/target-stat fields for the next PvP phase.
 - `mode_stats`: preserved pre-pivot Solo counters and current PvP statistics.
 - `legacy_mode_stats`: immutable copies of pre-pivot fleet counters and temporary one-sided v2 history-hunt counters.
-- `ruleset_mode_stats`: reciprocal contribution-target Solo W/L, player accuracy, streak, and Elo counters keyed by ruleset.
+- `ruleset_mode_stats`: isolated per-ruleset Solo W/L, action/clash rate, streak, and Elo counters. V2 and v3 are never mixed.
 - `challenges`: challenge-link preparation only.
 - `shares`: stable unique public result ID per completed game.
 
-Contribution refresh never touches snapshots inside existing games. The owner may see their chosen Player Harbour. Active Enemy Harbour responses are constructed from an allow-list: unknown and missed cells expose no dates, counts, levels, or target flags. The full enemy period and snapshot are projected only after completion. Existing fleet and one-sided games return an explicit retired-game response rather than being silently reinterpreted.
+Contribution refresh never touches snapshots inside existing games. The owner sees their own dates, derived powers, and deployment. Active Enemy Harbour responses are constructed from an allow-list: unknown cells reveal coordinates only; exposure adds combat level but not date, count, exact power, or unit kind. The full enemy period/snapshot/deployment is projected only after completion. Historical rulesets remain versioned and are never silently reinterpreted.
 
 ## Public and deployment surfaces
 

@@ -1,44 +1,76 @@
 # GitHarbour rules
 
-## Contribution targets
+`contribution_fleet_v3` is the active Solo ruleset. GitHub history is gameplay: activity breadth controls fleet size and activity intensity controls individual unit strength. Classic named ships, lengths, orientation, adjacency, ship health, and sunk semantics do not exist.
 
-Each harbour is ten weeks by seven weekdays: 70 frozen cells. Every snapshot cell contains its date, weekday, contribution count, and contribution level.
+## Battlefield and period selection
 
-- `contributionCount > 0` is one hittable target.
-- `contributionCount == 0` is empty water and produces a miss.
-- One hit clears a target regardless of contribution count or intensity.
-- Contribution level is visual only.
-- There are no named ships, orientation controls, or deployment step.
+A battlefield is a frozen, Sunday-aligned, contiguous `10 weeks × 7 weekdays = 70` real-calendar snapshot. Each cell retains date, weekday, contribution count, GitHub contribution level, derived Day Power, and derived combat level. The player may inspect every valid ten-week window, including zero-contribution windows, before locking one.
 
-## Reciprocal Solo setup
+The preview keeps separate metrics: total contributions, active days, Contribution Power (the sum of all positive Day Powers), Fleet Capacity, peak day, and maximum deployable power. A positive day is only a deployment candidate; it is not automatically a unit.
 
-The authenticated player chooses a week-aligned, contiguous ten-week period from their imported GitHub history. The server validates and freezes that period as the Player Harbour. It then chooses a different playable ten-week window from the same history as the AI Harbour.
+## Central balance model
 
-If normal 10–45-target player windows exist, selection is limited to that quality range; sparse or unusually dense histories fall back only to windows closest to it. Opponent selection prefers non-overlapping windows within five target days, then minimizes target-count difference and uses secure randomness among exact ties. If no fair non-overlapping period exists, it applies the same closest-density rule across all different windows. Both snapshots are immutable after creation.
+For `c > 0`:
 
-## Turn and AI model
+```text
+DayPower(c) = 1 + log2(1 + c)
+```
 
-The player starts. A transition is authoritative and transactional:
+Inactive days have zero contribution power. More contributions always increase power without a hard cap, while the logarithm provides diminishing returns.
 
-1. The player fires one coordinate at the hidden AI Harbour.
-2. If all AI targets are hit, the player wins immediately.
-3. Otherwise the AI selects one coordinate not present in its prior shots and fires at the Player Harbour.
-4. If all player targets are hit, the AI wins; otherwise control returns to the player.
+Fleet Capacity uses active-day breadth:
 
-A hit never grants an extra shot. The AI selector receives only board dimensions and its previous shot coordinates/results; it never receives either frozen board and cannot inspect hidden targets.
+```text
+capacity = clamp(round(3 + sqrt(12 × activeDays / 7)), 3, 14)
+```
 
-## Visibility and completion
+This currently maps `0→3`, `1→4`, `10→7`, `30→10`, `50→12`, and `70→14`. Reserve Power is `1.0`. Human-readable combat levels are derived from continuous power: Reserve/zero=`0`, `<4`=`1`, `<7`=`2`, `<10`=`3`, otherwise `4`. Combat always uses continuous power, never the display level.
 
-The player sees their selected harbour, dates, contribution pattern, and AI hit/miss marks during battle. On the AI Harbour, an untouched cell exposes only its coordinate and `unknown` state. A hit reveals frozen contribution count/level and a miss reveals only empty water. Enemy dates and the exact enemy period remain hidden until completion.
+## Deployment
 
-The first side to hit all contribution targets on the opposing harbour wins. Empty cells do not need to be explored. Terminal results use `player` or `ai`, reveal both periods, and reject further shots.
+The player deploys exactly Fleet Capacity units before battle:
 
-## Solo statistics
+- If active days exceed capacity, the player chooses exactly `capacity` contribution-backed cells.
+- If active days are at or below capacity, every active cell is required and empty slots are filled with Reserves.
+- A contribution-backed unit stays on its real date coordinate and receives that day's Day Power.
+- A Reserve uses an inactive real cell, has Power `1.0`, and never invents contribution activity.
+- Units have no shapes, orientation, adjacency, clustering, or movement rules.
+- Confirmation makes deployment immutable.
 
-Completed reciprocal games update games, wins, losses, win rate, current/longest win streak, player shots, player hits, accuracy, and average player shots per win exactly once. AI shots never enter player accuracy. Solo rating uses the existing 32-point Elo helper against a fixed 1200-rated AI.
+The computer applies the same capacity/power/Reserve rules and randomly chooses legal deployment cells server-side.
 
-The migration archives temporary one-sided v2 history-hunt counters before resetting reciprocal Solo statistics to a clean semantic baseline. Legacy `fleet_v1` games remain distinguishable and are never reinterpreted.
+## Solo opponent period
 
-## Future PvP
+The computer uses another valid ten-week period from the authenticated user's same real imported history. The server chooses randomly, preferring non-overlapping alternatives when available, and freezes it at game creation. Exactly one valid alternative is used normally. If no distinct valid alternative exists, creation stops with an explicit `history_not_playable` error; no synthetic data or fallback rule is invented.
 
-Future PvP replaces the AI Harbour with another authenticated developer's selected harbour and replaces the synchronous AI response with the opponent's turn. The two-board contribution-target rules and first-to-find-all-targets win condition remain unchanged.
+## Combat
+
+The player begins. Each action chooses one surviving deployed attacker and one opponent coordinate. A MISS or eliminated coordinate cannot be targeted again. A CLASH survivor remains exposed and may be targeted again; otherwise a defender win could make elimination impossible. A MISS contains no surviving deployed defender and eliminates nobody. A CLASH exposes both units and eliminates exactly one.
+
+The attacker win probability is:
+
+```text
+P = clamp(1 / (1 + 10 ^ ((defenderPower - attackerPower) / 10)), 0.15, 0.85)
+```
+
+Equal power is `50%`; stronger power always improves the chance; neither side can reach certainty. The authoritative server records probability and secure random roll in persisted combat history. If the attacker wins, the defender is eliminated. Otherwise the attacker is eliminated. There are no HP bars or multi-hit units.
+
+An attacker becomes exposed even after a miss. A defender becomes exposed when a clash occurs. During active play, an exposed enemy reveals only its coordinate and combat level—not its date, contribution count, exact power, or Reserve/contribution kind.
+
+If neither fleet is eliminated after the player action, the computer performs exactly one equivalent action. It chooses among its own surviving attackers and uses only public combat observations: exposed enemy coordinates/levels, previous misses/clashes, and previously targeted coordinates. It never receives the hidden player deployment for target selection and calls no external AI service. Hits/clash wins never grant an extra action.
+
+## Victory, reveal, and statistics
+
+The first side whose opponent has zero surviving deployed units wins. Both Victory and Defeat are possible, including when an attacking unit loses the clash that eliminates its own side's last survivor.
+
+Completion reveals both full frozen snapshots, both deployments, exact powers, combat history, period ranges, actions, misses, clashes won/lost, fleet sizes, surviving units, and rating change. Further actions are rejected.
+
+V3 Solo stats are isolated from earlier rulesets. `shots` means player combat actions and `hits`/accuracy mean actions that produced a clash (clash rate), not contribution targets found. W/L, streaks, average actions per win, and 32-point Elo against the fixed 1200 computer update exactly once.
+
+## Versioning and PvP
+
+Completed `fleet_v1` and `contribution_targets_v2` records remain historical data and are never reinterpreted as v3. Their legacy fields may remain in persisted JSON/schema solely for compatibility. New v3 Solo uses separate ruleset stats. PvP is explicitly outside this task and remains gated/archived.
+
+## Contributor invariant
+
+**NEVER INFER UNSPECIFIED GAMEPLAY MECHANICS.** If a gameplay-changing rule is missing from this file or the approved task, report/ask about the ambiguity instead of inventing adjacency, movement, targeting, damage, matchmaking, fallback, or other behavior.

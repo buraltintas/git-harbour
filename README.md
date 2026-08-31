@@ -30,7 +30,7 @@ cd apps/api && go vet ./...
 3. Use the PostgreSQL Session Pooler connection string for Koyeb's IPv4 network; retain its required `sslmode` settings and percent-encode the password.
 4. Store the connection string only as a Koyeb secret named `DATABASE_URL`.
 5. Run `DATABASE_URL='…' go run ./cmd/migrate up` from `apps/api`, or run the built container once with command `/migrate up`.
-6. Verify `schema_migrations` contains migrations through `007_reciprocal_solo_stats.sql`.
+6. Verify `schema_migrations` contains migrations through `008_contribution_fleet_v3.sql`.
 7. Do not configure Supabase Auth.
 8. Do not expose an anon key, service-role key, connection string, or any Supabase credential to the web build.
 
@@ -98,6 +98,6 @@ The static Pages/Koyeb split prevents a same-origin httpOnly session cookie. The
 
 ## Developer vs Developer
 
-Solo is reciprocal: **Battle Your History** lets the player choose a ten-week contribution harbour, then the server matches a fair, different hidden period from the same history. Player and AI trade exactly one shot; the first to find every opposing contribution day wins. New PvP creation remains gated while the preserved challenge infrastructure is moved to these same two-harbour rules.
+Solo uses contribution-powered fleets: the player compares and locks a real ten-week period, deploys contribution-backed units on their real dates plus any required weak Reserves, and battles a computer fleet built from a different real period of the same history. Each side chooses an attacker and target; bounded power-vs-power clashes eliminate one unit, and the first side to eliminate the opposing deployment wins. New PvP creation remains gated and is not part of this ruleset.
 
 See [docs/KOYEB.md](docs/KOYEB.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/API.md](docs/API.md), and [docs/GAME_RULES.md](docs/GAME_RULES.md).

@@ -1,48 +1,39 @@
 # HTTP API
 
-Private JSON routes require `Authorization: Bearer <GitHarbour application token>`.
+Private JSON routes require `Authorization: Bearer <GitHarbour application token>`. The client submits intent; the server derives capacity, power, legality, randomness, eliminations, computer actions, and winner.
 
-## Authentication and users
+## Authentication and history
 
 - `GET /auth/github/start`
 - `GET /auth/github/callback`
 - `POST /auth/exchange {code}`
 - `POST /auth/logout`
-- `POST /v1/dev/session` only in explicit development/test mode
+- `POST /v1/dev/session` (development/test only)
 - `GET /v1/me`
 - `GET /v1/me/contributions`
 
-## Battle Your History
+## Contribution Fleet Solo
 
-- `POST /v1/games/solo {playerStart}` validates and freezes the selected Player Harbour, then securely matches a different AI Harbour.
-- `GET /v1/games/{id}` reads an owner-scoped game.
-- `POST /v1/games/{id}/shots {x,y}` submits coordinate intent only.
+- `POST /v1/games/solo {playerStart}` freezes the selected period and a server-chosen distinct real period, prepares the hidden computer deployment, and returns `status: deployment`.
+- `POST /v1/games/{id}/deployment {units:[{x,y,kind}]}` validates the exact player deployment and locks it. `kind` is `contribution` or `reserve`.
+- `GET /v1/games/{id}` reads the owner-scoped state.
+- `POST /v1/games/{id}/actions {attacker:{x,y},target:{x,y}}` submits one player action. Unless terminal, the same transaction also resolves one computer response. Missed and eliminated coordinates are closed; an exposed clash survivor remains legally targetable.
 
-An active response contains `playerCells` and `enemyCells`, each with exactly 70 allow-listed projections. The owner receives their fully dated Player Harbour with AI shot marks. The Enemy Harbour uses:
+During setup/battle, `playerCells` contains the owner's dated frozen snapshot, derived power/level, deployed units, alive/exposed state, and computer target marks. `enemyCells` is allow-listed:
 
 ```json
 {"x":2,"y":4,"state":"unknown"}
-{"x":2,"y":5,"state":"miss"}
-{"x":2,"y":6,"state":"hit","contributionCount":14,"contributionLevel":3}
+{"x":2,"y":5,"state":"unknown","targeted":true}
+{"x":2,"y":6,"state":"exposed","combatLevel":3}
+{"x":3,"y":0,"state":"eliminated","combatLevel":1,"targeted":true}
 ```
 
-Unknown and missed enemy cells never include date, weekday, contribution count, or contribution level. Active responses include `currentTurn`, both target counts, both hit counts, player `shots`/`misses`/`accuracy`, and separate `aiShots`/`aiMisses`/`aiAccuracy`. A shot response contains one player event and, unless the player wins immediately, exactly one AI response event.
+Before completion, enemy cells never expose dates, weekdays, contribution counts/levels, exact unit power, complete deployment, or Reserve/contribution kind. The action event projection includes actor, attacker, target, MISS/CLASH, and attacker-won result; persisted probability/roll remains authoritative audit state.
 
-Only a completed response adds `enemyPeriod`, `ratingDelta`, `shareId`, `winner: player|ai`, and the full dated enemy snapshot. The selected `playerPeriod` is owner-visible throughout. Legacy fleet games and temporary one-sided v2 games return `410 legacy_game_retired` instead of being reinterpreted.
+Completed responses add the exact enemy period, full snapshot/deployment/powers, combat history, `winner`, `ratingDelta`, and `shareId`. `contribution_targets_v2` completed games remain readable as their own historical ruleset; active legacy games are not converted.
 
-## PvP transition
+## Public and PvP
 
-Read-only public profile, leaderboard, archived history, and existing challenge records remain available. New challenge creation, acceptance, and readiness return `503 pvp_refit` until contribution-target PvP setup is implemented. This avoids exposing an active mixed-ruleset product.
+Public routes remain `/v1/public/users/{login}`, `/v1/public/leaderboards/pvp`, `/u/{login}`, `/widgets/{login}.svg`, `/s/{shareId}`, `/share/games/{shareId}.png`, and `/healthz`. New PvP mutations remain gated; v3 does not implement PvP.
 
-## Public
-
-- `GET /v1/public/users/{login}`
-- `GET /v1/public/leaderboards/pvp`
-- `GET /u/{login}`
-- `GET /widgets/{login}.svg?theme=light|dark`
-- `GET /share/users/{login}.svg`
-- `GET /s/{shareId}`
-- `GET /share/games/{shareId}.png`
-- `GET /healthz`
-
-Public shares exist only for completed games. Errors use `{error:{code,message}}`; hidden internal state, auth values, GitHub tokens, database identifiers, and active periods are never serialized.
+Errors use `{error:{code,message}}`. `history_not_playable` explicitly represents the unresolved case where no distinct real opponent period exists.

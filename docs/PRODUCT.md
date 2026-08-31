@@ -1,23 +1,27 @@
 # GitHarbour product
 
-GitHarbour’s core object is a real public GitHub contribution calendar: **“Your GitHub history is a battlefield.”** Contribution cells are the targets. There is no separate ship placement layer, and contribution intensity never adds health, damage, probability, or extra turns.
+GitHarbour turns real public GitHub activity into strategy: **activity builds the fleet; intensity powers it.** Active-day breadth provides more deployable units, while each day's contribution intensity provides that coordinate's continuous, diminishing-return combat power. These are deliberately separate dimensions.
 
 ## Battle Your History
 
-Solo is a reciprocal battle between two frozen periods from the authenticated developer's own GitHub history.
+Solo is Player vs Computer using two frozen ten-week periods from the authenticated developer's own real history.
 
-The player first chooses a playable contiguous ten-week period as **Your Harbour**. Its dates and contribution pattern remain visible during battle. The server securely matches a different period with the closest practical target count as the **Hidden Harbour**, preferring a non-overlapping period when fairness permits. Its dates and untouched target positions remain concealed.
+The player compares periods using date range, total contributions, active days, Contribution Power, Fleet Capacity, peak day, and maximum deployable power. After locking a period, the player chooses which eligible active dates become units when candidates exceed capacity. Contribution units cannot move. Weak, explicit Reserves occupy inactive cells only when needed, so zero-contribution users can play without fabricated activity.
 
-The player fires one shot. If the Hidden Harbour survives, the non-cheating AI randomly selects one unshot coordinate and fires once at the Player Harbour. A hit never grants an extra shot. The player wins by finding all hidden contribution days first; the AI wins by finding all player contribution days first. Completion reveals both periods, Victory/Defeat, shots, accuracy, Elo change, and a stable share.
+The server randomly freezes a different real period, preferring a non-overlapping alternative, and deploys the computer under the same capacity, power, and Reserve rules. No synthetic GitHub identity or contribution calendar exists.
 
-Solo statistics represent competitive games: games, wins, losses, win rate, fixed-1200-opponent Elo, player shots/hits/accuracy, current and longest win streak, and average player shots per victory. AI shots never affect player accuracy.
+Each side takes one complete action: select a surviving attacker, then select an untargeted opponent coordinate. Misses eliminate nobody. A clash compares continuous unit power through bounded probabilistic combat and eliminates exactly one participant. Attacking exposes that unit; clashing exposes the defender. Power improves odds but never guarantees victory. The first side to eliminate every deployed enemy unit wins.
 
-## Developer vs Developer
+The result reveals both histories and deployments and explains fleet breadth, power, actions, misses, clash record, survivors, and rating. V3 Solo W/L, clash rate, streaks, and Elo are isolated from incompatible legacy target-hunt statistics.
 
-The existing challenge, identity, rating, history, and leaderboard infrastructure remains preserved. New PvP creation is temporarily gated. Its next ruleset will reuse reciprocal Solo directly: each developer chooses a contribution harbour, takes one shot per turn, and wins by finding every target on the opponent's frozen board.
+## Explicit non-goals
+
+There are no Carrier/Battleship/Cruiser/Submarine/Destroyer classes, fixed 5/4/3/3/2 fleet, orientation, ship shapes, adjacency, movement, HP, or sunk-by-length behavior. Contributions are not decorative and positive days are candidates—not automatic targets.
+
+PvP is not part of `contribution_fleet_v3`. Existing identity, challenge, rating, history, and leaderboard infrastructure stays preserved and gated until a separately approved PvP ruleset is defined.
+
+If no distinct second ten-week period exists, Solo reports the case and does not manufacture history. The fallback remains intentionally unresolved pending product confirmation.
 
 ## Preserved platform
 
-GitHub OAuth, application sessions, contribution import, Supabase PostgreSQL/pgx, public profiles, separate Solo/PvP stats, stable share IDs, canonical HTML, README widgets, social cards, GitHub Pages, Koyeb deployment, Primer styling, and authorization boundaries remain intact.
-
-Classic named ships, deployment controls, orientation, and ship health remain retired. Migration 007 archives the temporary one-sided v2 history-hunt counters and gives reciprocal Solo a clean W/L and Elo baseline without discarding the audit record.
+GitHub OAuth, application sessions, contribution import, Supabase PostgreSQL/pgx, frozen snapshot persistence, public profiles, versioned Solo/PvP stats, stable shares, canonical HTML, README widgets, GitHub Pages, Koyeb, Primer styling, mobile layouts, keyboard navigation, and authorization boundaries remain intact.
