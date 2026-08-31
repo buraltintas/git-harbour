@@ -58,12 +58,12 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 422, "contributions_missing", "Contribution history is unavailable.")
 		return
 	}
-	player, e := game.TargetWindowAt(days, request.PlayerStart)
+	player, e := game.FleetWindowAt(days, request.PlayerStart)
 	if e != nil {
 		writeError(w, 422, "invalid_player_harbour", "That ten-week contribution harbour is not playable.")
 		return
 	}
-	enemy, e := game.SelectFairOpponentWindow(days, player, game.SecureRand{})
+	enemy, e := game.SelectFleetOpponentWindow(days, player, game.SecureRand{})
 	if e != nil {
 		writeError(w, 422, "history_not_playable", "No different playable opponent period is available yet.")
 		return
@@ -73,12 +73,73 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "stats_failed", "Could not load stats.")
 		return
 	}
-	g := &State{ID: uuid(), Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", PlayerBoard: player.Cells, EnemyBoard: enemy.Cells, PlayerTargetShots: []game.TargetShot{}, AITargetShots: []game.TargetShot{}, PlayerStart: player.Cells[0].Date, EnemyStart: enemy.Cells[0].Date, PlayerTargetCount: player.TargetCount, EnemyTargetCount: enemy.TargetCount, Stats: stats}
+	enemyDeployment, e := game.RandomDeployment(enemy.Cells, game.SecureRand{})
+	if e != nil {
+		writeError(w, 500, "computer_deployment_failed", "Could not prepare the computer fleet.")
+		return
+	}
+	g := &State{ID: uuid(), Ruleset: game.ContributionFleetRuleset, Status: "deployment", Turn: "setup", PlayerBoard: player.Cells, EnemyBoard: enemy.Cells, PlayerDeployment: []game.FleetUnit{}, EnemyDeployment: enemyDeployment, FleetActions: []game.FleetAction{}, PlayerStart: player.Cells[0].Date, EnemyStart: enemy.Cells[0].Date, Stats: stats}
 	if e = s.repo.CreateGame(r.Context(), u.ID, g); e != nil {
 		writeError(w, 500, "game_create_failed", "Could not create the game.")
 		return
 	}
 	writeJSON(w, 201, publicGame(g))
+}
+
+func (s *Server) deployFleet(w http.ResponseWriter, r *http.Request) {
+	u, ok := s.needUser(w, r)
+	if !ok {
+		return
+	}
+	var request struct {
+		Units []game.DeploymentChoice `json:"units"`
+	}
+	if json.NewDecoder(r.Body).Decode(&request) != nil {
+		writeError(w, 400, "invalid_deployment", "A fleet deployment is required.")
+		return
+	}
+	g, e := s.repo.DeployFleet(r.Context(), u.ID, r.PathValue("id"), request.Units)
+	if e != nil {
+		code := "deployment_rejected"
+		if e == ErrSetupLocked {
+			code = "setup_locked"
+		} else if e == ErrNotFound {
+			code = "game_not_found"
+		}
+		writeError(w, 409, code, e.Error())
+		return
+	}
+	writeJSON(w, 200, publicGame(g))
+}
+
+func (s *Server) fleetAction(w http.ResponseWriter, r *http.Request) {
+	u, ok := s.needUser(w, r)
+	if !ok {
+		return
+	}
+	var request struct {
+		Attacker game.Coord `json:"attacker"`
+		Target   game.Coord `json:"target"`
+	}
+	if json.NewDecoder(r.Body).Decode(&request) != nil {
+		writeError(w, 400, "invalid_action", "An attacker and target are required.")
+		return
+	}
+	g, events, e := s.repo.ActFleet(r.Context(), u.ID, r.PathValue("id"), request.Attacker, request.Target)
+	if e != nil {
+		code := "action_rejected"
+		switch e {
+		case ErrNotFound:
+			code = "game_not_found"
+		case ErrGameComplete:
+			code = "game_complete"
+		case ErrNotYourTurn:
+			code = "not_your_turn"
+		}
+		writeError(w, 409, code, e.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]any{"game": publicGame(g), "events": publicFleetEvents(events)})
 }
 func (s *Server) getGame(w http.ResponseWriter, r *http.Request) {
 	u, ok := s.needUser(w, r)
@@ -88,7 +149,7 @@ func (s *Server) getGame(w http.ResponseWriter, r *http.Request) {
 	g, e := s.repo.Game(r.Context(), u.ID, r.PathValue("id"))
 	if e != nil {
 		if e == ErrLegacyGame {
-			writeError(w, 410, "legacy_game_retired", "This earlier battle cannot continue under reciprocal contribution-target rules.")
+			writeError(w, 410, "legacy_game_retired", "This earlier battle is historical and cannot continue under contribution_fleet_v3.")
 			return
 		}
 		if p, ok := s.repo.(PVPRepository); ok {

@@ -78,6 +78,9 @@ func decorate(p PublicStats) PublicStats {
 	return p
 }
 func publicGame(g *State) map[string]any {
+	if g.Ruleset == game.ContributionFleetRuleset {
+		return publicFleetGame(g)
+	}
 	if g.Ruleset == "contribution_targets_v2" {
 		return publicTargetGame(g)
 	}
@@ -90,6 +93,181 @@ func publicGame(g *State) map[string]any {
 		m["enemyPeriod"] = map[string]string{"start": g.EnemyStart, "end": dateEnd(g.EnemyStart)}
 	}
 	return m
+}
+
+func windowSummary(cells []game.Cell) map[string]any {
+	w, _ := game.SummarizeFleetWindow(cells, 0)
+	return map[string]any{
+		"totalContributions": w.TotalContributions, "activeDays": w.ActiveDays,
+		"contributionPower": w.ContributionPower, "fleetCapacity": w.FleetCapacity,
+		"peakCount": w.PeakCount, "peakDate": w.PeakDate, "maxDeployedPower": w.MaxDeployedPower,
+	}
+}
+
+func publicFleetGame(g *State) map[string]any {
+	reveal := g.Status == "complete"
+	playerActions, aiActions, playerMisses, aiMisses, playerClashes, aiClashes, playerWins, aiWins := fleetMetrics(g.FleetActions)
+	out := map[string]any{
+		"id": g.ID, "mode": "solo", "ruleset": g.Ruleset, "status": g.Status,
+		"currentTurn": g.Turn, "winner": g.Winner, "playerCells": projectFleetBoard(g.PlayerBoard, g.PlayerDeployment, g.FleetActions, true, reveal),
+		"enemyCells":          projectFleetBoard(g.EnemyBoard, g.EnemyDeployment, g.FleetActions, false, reveal),
+		"playerFleetCapacity": game.FleetCapacity(game.TargetCount(g.PlayerBoard)),
+		"enemyFleetCapacity":  game.FleetCapacity(game.TargetCount(g.EnemyBoard)),
+		"playerUnitsAlive":    game.AliveCount(g.PlayerDeployment), "enemyUnitsAlive": game.AliveCount(g.EnemyDeployment),
+		"playerSummary": windowSummary(g.PlayerBoard), "stats": g.Stats,
+		"turns": playerActions, "shots": playerActions, "misses": playerMisses, "clashes": playerClashes,
+		"clashesWon": playerWins, "clashesLost": playerClashes - playerWins,
+		"aiShots": aiActions, "aiMisses": aiMisses, "aiClashes": aiClashes,
+		"aiClashesWon": aiWins, "aiClashesLost": aiClashes - aiWins,
+		"playerPeriod": map[string]string{"start": g.PlayerStart, "end": dateEnd(g.PlayerStart)},
+	}
+	if g.Status == "deployment" {
+		out["deploymentRequired"] = len(g.PlayerDeployment) == 0
+	}
+	if reveal {
+		out["enemyPeriod"] = map[string]string{"start": g.EnemyStart, "end": dateEnd(g.EnemyStart)}
+		out["enemySummary"] = windowSummary(g.EnemyBoard)
+		out["playerStartingPower"], out["enemyStartingPower"] = fleetPower(g.PlayerDeployment, false), fleetPower(g.EnemyDeployment, false)
+		out["playerSurvivingPower"], out["enemySurvivingPower"] = fleetPower(g.PlayerDeployment, true), fleetPower(g.EnemyDeployment, true)
+		out["playerStrongestUnit"], out["enemyStrongestUnit"] = strongestUnit(g.PlayerBoard, g.PlayerDeployment), strongestUnit(g.EnemyBoard, g.EnemyDeployment)
+		playerUpsets, aiUpsets := 0, 0
+		for _, action := range g.FleetActions {
+			if action.Result == "clash" && action.AttackerWon && action.AttackerPower < action.DefenderPower {
+				if action.Actor == "player" {
+					playerUpsets++
+				} else {
+					aiUpsets++
+				}
+			}
+		}
+		out["playerUpsetWins"], out["aiUpsetWins"] = playerUpsets, aiUpsets
+		out["ratingDelta"], out["shareId"] = g.RatingDelta, g.ShareID
+		out["actions"] = g.FleetActions
+	}
+	return out
+}
+
+func fleetPower(units []game.FleetUnit, survivingOnly bool) float64 {
+	total := 0.0
+	for _, unit := range units {
+		if !survivingOnly || unit.Alive {
+			total += unit.Power
+		}
+	}
+	return total
+}
+func strongestUnit(board []game.Cell, units []game.FleetUnit) map[string]any {
+	var best *game.FleetUnit
+	for i := range units {
+		if best == nil || units[i].Power > best.Power {
+			best = &units[i]
+		}
+	}
+	if best == nil {
+		return nil
+	}
+	out := map[string]any{"kind": best.Kind, "power": best.Power, "combatLevel": best.Level}
+	if best.Kind == "contribution" {
+		cell := board[best.X*game.Height+best.Y]
+		out["date"], out["contributionCount"] = cell.Date, cell.ContributionCount
+	}
+	return out
+}
+
+func fleetMetrics(actions []game.FleetAction) (playerActions, aiActions, playerMisses, aiMisses, playerClashes, aiClashes, playerWins, aiWins int) {
+	for _, action := range actions {
+		if action.Actor == "player" {
+			playerActions++
+			if action.Result == "miss" {
+				playerMisses++
+			} else {
+				playerClashes++
+				if action.AttackerWon {
+					playerWins++
+				}
+			}
+		} else {
+			aiActions++
+			if action.Result == "miss" {
+				aiMisses++
+			} else {
+				aiClashes++
+				if action.AttackerWon {
+					aiWins++
+				}
+			}
+		}
+	}
+	return
+}
+
+func projectFleetBoard(board []game.Cell, units []game.FleetUnit, actions []game.FleetAction, own, reveal bool) []map[string]any {
+	byCoord := map[game.Coord]game.FleetUnit{}
+	for _, unit := range units {
+		byCoord[unit.Coord] = unit
+	}
+	targeted := map[game.Coord]bool{}
+	missed := map[game.Coord]bool{}
+	actor := "player"
+	if own {
+		actor = "ai"
+	}
+	for _, action := range actions {
+		if action.Actor == actor {
+			targeted[action.Target] = true
+			if action.Result == "miss" {
+				missed[action.Target] = true
+			}
+		}
+	}
+	out := make([]map[string]any, 0, len(board))
+	for i, cell := range board {
+		coord := game.Coord{X: i / game.Height, Y: i % game.Height}
+		projected := map[string]any{"x": coord.X, "y": coord.Y, "state": "unknown"}
+		if targeted[coord] {
+			projected["targeted"] = true
+		}
+		unit, deployed := byCoord[coord]
+		if deployed && unit.Alive && unit.Exposed {
+			delete(projected, "targeted")
+		}
+		if own || reveal {
+			projected["date"], projected["weekday"] = cell.Date, cell.Weekday
+			projected["contributionCount"], projected["contributionLevel"] = cell.ContributionCount, cell.ContributionLevel
+			projected["dayPower"], projected["combatLevel"] = game.DayPower(cell.ContributionCount), game.CombatLevel(game.DayPower(cell.ContributionCount))
+			projected["state"] = "empty"
+			if cell.ContributionCount > 0 {
+				projected["state"] = "eligible"
+			}
+		}
+		if missed[coord] {
+			projected["state"] = "miss"
+		}
+		if deployed && (own || reveal || unit.Exposed) {
+			state := "deployed"
+			if unit.Exposed {
+				state = "exposed"
+			}
+			if !unit.Alive {
+				state = "eliminated"
+			}
+			projected["state"], projected["combatLevel"] = state, unit.Level
+			if own || reveal {
+				projected["unitKind"] = unit.Kind
+				projected["unitPower"] = unit.Power
+			}
+		}
+		out = append(out, projected)
+	}
+	return out
+}
+
+func publicFleetEvents(events []game.FleetAction) []map[string]any {
+	out := make([]map[string]any, 0, len(events))
+	for _, event := range events {
+		out = append(out, map[string]any{"actor": event.Actor, "attacker": event.Attacker, "target": event.Target, "result": event.Result, "attackerWon": event.AttackerWon})
+	}
+	return out
 }
 
 func publicTargetGame(g *State) map[string]any {
@@ -232,6 +410,66 @@ func finishTargetState(g *State, p PublicStats, winner string) PublicStats {
 	p = decorate(PublicStats{Games: stats.Games, Wins: stats.Wins, Losses: stats.Losses, Rating: stats.Rating, Shots: stats.Shots, Hits: stats.Hits, CurrentStreak: stats.CurrentStreak, LongestStreak: stats.LongestStreak, WinShots: stats.WinShots})
 	g.Stats, g.RatingDelta, g.ShareID = p, p.Rating-old, randomSecret(9)
 	return p
+}
+func finishFleetState(g *State, p PublicStats, winner string) PublicStats {
+	if g.TerminalApplied {
+		return p
+	}
+	g.Status, g.Turn, g.Winner, g.TerminalApplied = "complete", "complete", winner, true
+	old := p.Rating
+	playerActions, _, _, _, playerClashes, _, _, _ := fleetMetrics(g.FleetActions)
+	stats := game.Stats{Games: p.Games, Wins: p.Wins, Losses: p.Losses, Rating: p.Rating, Shots: p.Shots, Hits: p.Hits, CurrentStreak: p.CurrentStreak, LongestStreak: p.LongestStreak, WinShots: p.WinShots}
+	stats = game.UpdateStatsAgainst(stats, 1200, winner == "player", playerActions, playerClashes)
+	p = decorate(PublicStats{Games: stats.Games, Wins: stats.Wins, Losses: stats.Losses, Rating: stats.Rating, Shots: stats.Shots, Hits: stats.Hits, CurrentStreak: stats.CurrentStreak, LongestStreak: stats.LongestStreak, WinShots: stats.WinShots})
+	g.Stats, g.RatingDelta, g.ShareID = p, p.Rating-old, randomSecret(9)
+	return p
+}
+
+func resolveFleetTurn(g *State, p PublicStats, attacker, target game.Coord, r game.Rander) ([]game.FleetAction, PublicStats, error) {
+	if g.Ruleset != game.ContributionFleetRuleset || len(g.PlayerBoard) != game.BoardCells || len(g.EnemyBoard) != game.BoardCells {
+		return nil, p, ErrLegacyGame
+	}
+	if g.Status == "complete" {
+		return nil, p, ErrGameComplete
+	}
+	if g.Status != "battle" || g.Turn != "player" {
+		return nil, p, ErrNotYourTurn
+	}
+	event, player, enemy, err := game.ResolveFleetAction(g.PlayerDeployment, g.EnemyDeployment, g.FleetActions, "player", attacker, target, r)
+	if err != nil {
+		return nil, p, err
+	}
+	g.PlayerDeployment, g.EnemyDeployment = player, enemy
+	g.FleetActions = append(g.FleetActions, event)
+	events := []game.FleetAction{event}
+	if game.AliveCount(g.EnemyDeployment) == 0 {
+		p = finishFleetState(g, p, "player")
+		return events, p, nil
+	}
+	if game.AliveCount(g.PlayerDeployment) == 0 {
+		p = finishFleetState(g, p, "ai")
+		return events, p, nil
+	}
+	g.Turn = "ai"
+	aiAttacker, aiTarget, err := game.NextComputerAction(g.EnemyDeployment, g.FleetActions, r)
+	if err != nil {
+		return nil, p, err
+	}
+	aiEvent, enemy, player, err := game.ResolveFleetAction(g.EnemyDeployment, g.PlayerDeployment, g.FleetActions, "ai", aiAttacker, aiTarget, r)
+	if err != nil {
+		return nil, p, err
+	}
+	g.EnemyDeployment, g.PlayerDeployment = enemy, player
+	g.FleetActions = append(g.FleetActions, aiEvent)
+	events = append(events, aiEvent)
+	if game.AliveCount(g.PlayerDeployment) == 0 {
+		p = finishFleetState(g, p, "ai")
+	} else if game.AliveCount(g.EnemyDeployment) == 0 {
+		p = finishFleetState(g, p, "player")
+	} else {
+		g.Turn = "player"
+	}
+	return events, p, nil
 }
 func resolveTargetTurn(g *State, p PublicStats, c game.Coord, r game.Rander) ([]game.BattleEvent, PublicStats, error) {
 	if g.Ruleset != "contribution_targets_v2" {

@@ -46,31 +46,34 @@ type ContributionSummary struct {
 	Preview    []game.Cell `json:"preview"`
 }
 type State struct {
-	ID                string            `json:"id"`
-	Ruleset           string            `json:"ruleset,omitempty"`
-	Status            string            `json:"status"`
-	Turn              string            `json:"turn"`
-	Board             []game.Cell       `json:"boardSnapshot,omitempty"`
-	Shots             []game.TargetShot `json:"targetShots,omitempty"`
-	PeriodStart       string            `json:"periodStart,omitempty"`
-	TargetCount       int               `json:"targetCount,omitempty"`
-	PlayerBoard       []game.Cell       `json:"playerBoardSnapshot,omitempty"`
-	EnemyBoard        []game.Cell       `json:"enemyBoardSnapshot,omitempty"`
-	PlayerTargetShots []game.TargetShot `json:"playerTargetShots,omitempty"`
-	AITargetShots     []game.TargetShot `json:"aiTargetShots,omitempty"`
-	PlayerTargetCount int               `json:"playerTargetCount,omitempty"`
-	EnemyTargetCount  int               `json:"enemyTargetCount,omitempty"`
-	PlayerFleet       []game.Ship       `json:"playerFleet"`
-	EnemyFleet        []game.Ship       `json:"enemyFleet"`
-	PlayerShots       []game.Shot       `json:"playerShots"`
-	AIShots           []game.Shot       `json:"aiShots"`
-	PlayerStart       string            `json:"playerStart"`
-	EnemyStart        string            `json:"enemyStart"`
-	Winner            string            `json:"winner,omitempty"`
-	RatingDelta       int               `json:"ratingDelta,omitempty"`
-	ShareID           string            `json:"shareId,omitempty"`
-	Stats             PublicStats       `json:"stats"`
-	TerminalApplied   bool              `json:"-"`
+	ID                string             `json:"id"`
+	Ruleset           string             `json:"ruleset,omitempty"`
+	Status            string             `json:"status"`
+	Turn              string             `json:"turn"`
+	Board             []game.Cell        `json:"boardSnapshot,omitempty"`
+	Shots             []game.TargetShot  `json:"targetShots,omitempty"`
+	PeriodStart       string             `json:"periodStart,omitempty"`
+	TargetCount       int                `json:"targetCount,omitempty"`
+	PlayerBoard       []game.Cell        `json:"playerBoardSnapshot,omitempty"`
+	EnemyBoard        []game.Cell        `json:"enemyBoardSnapshot,omitempty"`
+	PlayerTargetShots []game.TargetShot  `json:"playerTargetShots,omitempty"`
+	AITargetShots     []game.TargetShot  `json:"aiTargetShots,omitempty"`
+	PlayerTargetCount int                `json:"playerTargetCount,omitempty"`
+	EnemyTargetCount  int                `json:"enemyTargetCount,omitempty"`
+	PlayerDeployment  []game.FleetUnit   `json:"playerDeployment,omitempty"`
+	EnemyDeployment   []game.FleetUnit   `json:"enemyDeployment,omitempty"`
+	FleetActions      []game.FleetAction `json:"fleetActions,omitempty"`
+	PlayerFleet       []game.Ship        `json:"playerFleet"`
+	EnemyFleet        []game.Ship        `json:"enemyFleet"`
+	PlayerShots       []game.Shot        `json:"playerShots"`
+	AIShots           []game.Shot        `json:"aiShots"`
+	PlayerStart       string             `json:"playerStart"`
+	EnemyStart        string             `json:"enemyStart"`
+	Winner            string             `json:"winner,omitempty"`
+	RatingDelta       int                `json:"ratingDelta,omitempty"`
+	ShareID           string             `json:"shareId,omitempty"`
+	Stats             PublicStats        `json:"stats"`
+	TerminalApplied   bool               `json:"-"`
 }
 
 type Repository interface {
@@ -88,6 +91,8 @@ type Repository interface {
 	CreateGame(context.Context, string, *State) error
 	Game(context.Context, string, string) (*State, error)
 	Shoot(context.Context, string, string, game.Coord) (*State, []game.BattleEvent, error)
+	DeployFleet(context.Context, string, string, []game.DeploymentChoice) (*State, error)
+	ActFleet(context.Context, string, string, game.Coord, game.Coord) (*State, []game.FleetAction, error)
 	PublicShare(context.Context, string) (*State, User, error)
 	Close()
 }

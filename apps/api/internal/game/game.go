@@ -2,10 +2,10 @@ package game
 
 import (
 	"crypto/rand"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"sort"
 	"time"
 )
@@ -134,11 +134,11 @@ func (SecureRand) Intn(n int) (int, error) {
 	if n <= 0 {
 		return 0, errors.New("invalid bound")
 	}
-	var b [8]byte
-	if _, e := rand.Read(b[:]); e != nil {
+	v, e := rand.Int(rand.Reader, big.NewInt(int64(n)))
+	if e != nil {
 		return 0, e
 	}
-	return int(binary.BigEndian.Uint64(b[:]) % uint64(n)), nil
+	return int(v.Int64()), nil
 }
 
 func OpponentStart(totalWeeks, selected int, r Rander) (int, error) {

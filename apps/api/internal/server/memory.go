@@ -81,7 +81,7 @@ func (m *MemoryRepository) UpsertGitHubUser(_ context.Context, u User, days []ga
 		}
 		m.users[u.ID] = u
 		m.github[u.GitHubID] = u.ID
-		m.stats[u.ID] = map[string]PublicStats{"solo": decorate(PublicStats{Rating: 1200}), "pvp": decorate(PublicStats{Rating: 1200})}
+		m.stats[u.ID] = map[string]PublicStats{"solo": decorate(PublicStats{Rating: 1200}), "solo_v2": decorate(PublicStats{Rating: 1200}), "pvp": decorate(PublicStats{Rating: 1200})}
 	}
 	m.contributions[u.ID] = append([]game.Cell(nil), days...)
 	return u, nil
@@ -201,10 +201,61 @@ func (m *MemoryRepository) Game(_ context.Context, uid, id string) (*State, erro
 	if g == nil {
 		return nil, ErrNotFound
 	}
-	if g.Ruleset != "contribution_targets_v2" || len(g.PlayerBoard) != game.BoardCells || len(g.EnemyBoard) != game.BoardCells {
+	validV3 := g.Ruleset == game.ContributionFleetRuleset && len(g.PlayerBoard) == game.BoardCells && len(g.EnemyBoard) == game.BoardCells
+	readableV2 := g.Ruleset == "contribution_targets_v2" && g.Status == "complete"
+	if !validV3 && !readableV2 {
 		return nil, ErrLegacyGame
 	}
 	return cloneState(g), nil
+}
+func (m *MemoryRepository) DeployFleet(_ context.Context, uid, id string, choices []game.DeploymentChoice) (*State, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.owners[id] != uid {
+		return nil, ErrNotFound
+	}
+	g := m.games[id]
+	if g == nil {
+		return nil, ErrNotFound
+	}
+	if g.Ruleset != game.ContributionFleetRuleset {
+		return nil, ErrLegacyGame
+	}
+	if g.Status != "deployment" || len(g.PlayerDeployment) > 0 {
+		return nil, ErrSetupLocked
+	}
+	units, e := game.ValidateDeployment(g.PlayerBoard, choices)
+	if e != nil {
+		return nil, e
+	}
+	next := cloneState(g)
+	next.PlayerDeployment = units
+	next.Status = "battle"
+	next.Turn = "player"
+	m.games[id] = next
+	return cloneState(next), nil
+}
+func (m *MemoryRepository) ActFleet(_ context.Context, uid, id string, attacker, target game.Coord) (*State, []game.FleetAction, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.owners[id] != uid {
+		return nil, nil, ErrNotFound
+	}
+	g := m.games[id]
+	if g == nil {
+		return nil, nil, ErrNotFound
+	}
+	next := cloneState(g)
+	events, stats, e := resolveFleetTurn(next, m.stats[uid]["solo"], attacker, target, game.SecureRand{})
+	if e != nil {
+		return nil, nil, e
+	}
+	m.games[id] = next
+	m.stats[uid]["solo"] = stats
+	if next.ShareID != "" {
+		m.shares[next.ShareID] = id
+	}
+	return cloneState(next), events, nil
 }
 func (m *MemoryRepository) Shoot(_ context.Context, uid, id string, c game.Coord) (*State, []game.BattleEvent, error) {
 	m.mu.Lock()
@@ -216,14 +267,14 @@ func (m *MemoryRepository) Shoot(_ context.Context, uid, id string, c game.Coord
 	if g == nil {
 		return nil, nil, ErrNotFound
 	}
-	p := m.stats[uid]["solo"]
+	p := m.stats[uid]["solo_v2"]
 	next := cloneState(g)
 	events, np, e := resolveTargetTurn(next, p, c, game.SecureRand{})
 	if e != nil {
 		return nil, nil, e
 	}
 	m.games[id] = next
-	m.stats[uid]["solo"] = np
+	m.stats[uid]["solo_v2"] = np
 	if next.ShareID != "" {
 		m.shares[next.ShareID] = id
 	}

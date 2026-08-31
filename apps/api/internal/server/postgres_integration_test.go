@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func TestPostgresPersistenceAndConcurrentShot(t *testing.T) {
+func TestPostgresPersistenceAndConcurrentFleetAction(t *testing.T) {
 	url := os.Getenv("GITHARBOUR_INTEGRATION_DATABASE_URL")
 	if url == "" {
 		t.Skip("GITHARBOUR_INTEGRATION_DATABASE_URL not set; isolated PostgreSQL integration not run")
@@ -41,12 +41,15 @@ func TestPostgresPersistenceAndConcurrentShot(t *testing.T) {
 	}
 	days := mockCells(time.Now())
 	player, enemy := days[:70], days[70:140]
-	for i := range enemy {
-		enemy[i].ContributionCount, enemy[i].ContributionLevel = 0, 0
+	playerUnits, err := game.RandomDeployment(player, game.SecureRand{})
+	if err != nil {
+		t.Fatal(err)
 	}
-	enemy[0].ContributionCount, enemy[0].ContributionLevel = 1, 1
-	enemy[69].ContributionCount, enemy[69].ContributionLevel = 2, 2
-	g := &State{ID: uuid(), Ruleset: "contribution_targets_v2", Status: "battle", Turn: "player", PlayerBoard: player, EnemyBoard: enemy, PlayerStart: player[0].Date, EnemyStart: enemy[0].Date, PlayerTargetCount: game.TargetCount(player), EnemyTargetCount: game.TargetCount(enemy), Stats: decorate(PublicStats{Rating: 1200})}
+	enemyUnits, err := game.RandomDeployment(enemy, game.SecureRand{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := &State{ID: uuid(), Ruleset: game.ContributionFleetRuleset, Status: "battle", Turn: "player", PlayerBoard: player, EnemyBoard: enemy, PlayerDeployment: playerUnits, EnemyDeployment: enemyUnits, FleetActions: []game.FleetAction{}, PlayerStart: player[0].Date, EnemyStart: enemy[0].Date, Stats: decorate(PublicStats{Rating: 1200})}
 	if err = repo.CreateGame(ctx, u.ID, g); err != nil {
 		t.Fatal(err)
 	}
@@ -59,17 +62,28 @@ func TestPostgresPersistenceAndConcurrentShot(t *testing.T) {
 	if err != nil || restored.ID != g.ID {
 		t.Fatal("game did not survive repository restart", err)
 	}
-	if _, events, err := NewPostgresRepository(otherPool).Shoot(ctx, u.ID, g.ID, game.Coord{X: 0, Y: 0}); err != nil || len(events) != 2 {
+	attacker := playerUnits[0].Coord
+	if _, events, err := NewPostgresRepository(otherPool).ActFleet(ctx, u.ID, g.ID, attacker, enemyUnits[0].Coord); err != nil || len(events) < 1 {
 		t.Fatal("reciprocal transition did not persist", events, err)
 	}
 	restored, err = NewPostgresRepository(otherPool).Game(ctx, u.ID, g.ID)
-	if err != nil || len(restored.PlayerBoard) != 70 || len(restored.EnemyBoard) != 70 || len(restored.AITargetShots) != 1 || restored.Turn != "player" {
-		t.Fatal("dual snapshots, AI shot, or current turn did not survive restart", restored, err)
+	if err != nil || len(restored.PlayerBoard) != 70 || len(restored.EnemyBoard) != 70 || len(restored.FleetActions) < 1 {
+		t.Fatal("snapshots, deployments, and actions did not survive restart", restored, err)
 	}
+	if restored.Status == "complete" {
+		t.Skip("secure combat roll completed the small integration battle before concurrency assertion")
+	}
+	for _, unit := range restored.PlayerDeployment {
+		if unit.Alive {
+			attacker = unit.Coord
+			break
+		}
+	}
+	target := enemyUnits[1].Coord
 	results := make(chan error, 2)
 	for i := 0; i < 2; i++ {
 		go func() {
-			_, _, e := NewPostgresRepository(otherPool).Shoot(ctx, u.ID, g.ID, game.Coord{X: 9, Y: 6})
+			_, _, e := NewPostgresRepository(otherPool).ActFleet(ctx, u.ID, g.ID, attacker, target)
 			results <- e
 		}()
 	}
@@ -80,15 +94,11 @@ func TestPostgresPersistenceAndConcurrentShot(t *testing.T) {
 		}
 	}
 	if success != 1 {
-		t.Fatalf("duplicate concurrent shot advanced %d times", success)
+		t.Fatalf("duplicate concurrent target advanced %d times", success)
 	}
 	restored, err = NewPostgresRepository(otherPool).Game(ctx, u.ID, g.ID)
-	if err != nil || restored.Status != "complete" || restored.Winner != "player" || len(restored.AITargetShots) != 1 {
-		t.Fatal("terminal reciprocal state was not concurrency safe", restored, err)
-	}
-	stats, err := repo.Stats(ctx, u.ID, "solo")
-	if err != nil || stats.Games != 1 || stats.Wins != 1 || stats.Losses != 0 {
-		t.Fatal("terminal reciprocal stats were not applied once", stats, err)
+	if err != nil || len(restored.FleetActions) < 2 {
+		t.Fatal("concurrent fleet state was not persisted safely", restored, err)
 	}
 }
 

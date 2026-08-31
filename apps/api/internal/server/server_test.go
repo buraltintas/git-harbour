@@ -240,7 +240,7 @@ func TestPublicGameHidesPersistedEnemyState(t *testing.T) {
 	}
 }
 
-func TestSoloContributionTargetFlowAndStatsOnce(t *testing.T) {
+func TestSoloContributionFleetCreateDeployAndAct(t *testing.T) {
 	s, repo := testServer(t)
 	token := devToken(t, s)
 	days, _ := repo.Contributions(context.Background(), repo.sessions[hashKey(digest(token))].UserID)
@@ -250,11 +250,11 @@ func TestSoloContributionTargetFlowAndStatsOnce(t *testing.T) {
 		t.Fatal(created.Code, created.Body.String())
 	}
 	var response struct {
-		ID               string `json:"id"`
-		EnemyTargetCount int    `json:"enemyTargetCount"`
+		ID     string `json:"id"`
+		Status string `json:"status"`
 	}
 	_ = json.Unmarshal(created.Body.Bytes(), &response)
-	if response.ID == "" || response.EnemyTargetCount == 0 || !strings.Contains(created.Body.String(), `"playerCells"`) || strings.Contains(created.Body.String(), `"enemyPeriod"`) {
+	if response.ID == "" || response.Status != "deployment" || !strings.Contains(created.Body.String(), `"playerSummary"`) || strings.Contains(created.Body.String(), `"enemyPeriod"`) || strings.Contains(created.Body.String(), frozenEnemyDateMarker(days)) {
 		t.Fatal("active game leaked hidden board", created.Body.String())
 	}
 	repo.mu.Lock()
@@ -263,8 +263,112 @@ func TestSoloContributionTargetFlowAndStatsOnce(t *testing.T) {
 	if len(frozen.PlayerBoard) != 70 || len(frozen.EnemyBoard) != 70 || frozen.PlayerStart == frozen.EnemyStart {
 		t.Fatal("game must freeze two different 70-cell boards")
 	}
-	if len(frozen.AITargetShots) != 0 || frozen.Turn != "player" {
-		t.Fatal("new game did not start on the player turn")
+	if len(frozen.EnemyDeployment) != game.FleetCapacity(game.TargetCount(frozen.EnemyBoard)) || frozen.Turn != "setup" {
+		t.Fatal("computer deployment or setup turn is invalid")
+	}
+	choices := deploymentChoices(frozen.PlayerBoard)
+	body, _ := json.Marshal(map[string]any{"units": choices})
+	deployed := httptest.NewRecorder()
+	s.Handler().ServeHTTP(deployed, authed("POST", "/v1/games/"+response.ID+"/deployment", token, string(body)))
+	if deployed.Code != 200 || !strings.Contains(deployed.Body.String(), `"status":"battle"`) {
+		t.Fatal(deployed.Code, deployed.Body.String())
+	}
+	repo.mu.Lock()
+	ready := cloneState(repo.games[response.ID])
+	repo.mu.Unlock()
+	actionBody, _ := json.Marshal(map[string]any{"attacker": ready.PlayerDeployment[0].Coord, "target": game.Coord{X: 0, Y: 0}})
+	action := httptest.NewRecorder()
+	s.Handler().ServeHTTP(action, authed("POST", "/v1/games/"+response.ID+"/actions", token, string(actionBody)))
+	if action.Code != 200 || !strings.Contains(action.Body.String(), `"events"`) {
+		t.Fatal(action.Code, action.Body.String())
+	}
+}
+
+func frozenEnemyDateMarker(days []game.Cell) string {
+	if len(days) > 70 {
+		return days[70].Date
+	}
+	return "never"
+}
+func deploymentChoices(board []game.Cell) []game.DeploymentChoice {
+	capacity := game.FleetCapacity(game.TargetCount(board))
+	out := []game.DeploymentChoice{}
+	for i, cell := range board {
+		if cell.ContributionCount > 0 && len(out) < capacity {
+			out = append(out, game.DeploymentChoice{Coord: game.Coord{X: i / 7, Y: i % 7}, Kind: "contribution"})
+		}
+	}
+	for i, cell := range board {
+		if cell.ContributionCount == 0 && len(out) < capacity {
+			out = append(out, game.DeploymentChoice{Coord: game.Coord{X: i / 7, Y: i % 7}, Kind: "reserve"})
+		}
+	}
+	return out
+}
+
+func TestContributionFleetVictoryDefeatAndExposure(t *testing.T) {
+	board := mockCells(time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC))[:70]
+	base := func() *State {
+		return &State{Ruleset: game.ContributionFleetRuleset, Status: "battle", Turn: "player", PlayerBoard: board, EnemyBoard: append([]game.Cell(nil), board...), PlayerDeployment: []game.FleetUnit{{Coord: game.Coord{X: 0, Y: 0}, Kind: "reserve", Power: 1, Alive: true}}, EnemyDeployment: []game.FleetUnit{{Coord: game.Coord{X: 1, Y: 1}, Kind: "reserve", Power: 1, Alive: true}}}
+	}
+	win := base()
+	events, stats, err := resolveFleetTurn(win, decorate(PublicStats{Rating: 1200}), game.Coord{X: 0, Y: 0}, game.Coord{X: 1, Y: 1}, fixedRand(0))
+	if err != nil || len(events) != 1 || win.Winner != "player" || stats.Wins != 1 || !win.PlayerDeployment[0].Exposed || win.EnemyDeployment[0].Alive {
+		t.Fatal(events, stats, win, err)
+	}
+	if _, again, err := resolveFleetTurn(win, stats, game.Coord{X: 0, Y: 0}, game.Coord{X: 1, Y: 1}, fixedRand(0)); err != ErrGameComplete || again.Games != 1 {
+		t.Fatal("terminal v3 stats applied twice", again, err)
+	}
+	loss := base()
+	events, stats, err = resolveFleetTurn(loss, decorate(PublicStats{Rating: 1200}), game.Coord{X: 0, Y: 0}, game.Coord{X: 2, Y: 2}, fixedRand(0))
+	if err != nil || len(events) != 2 || loss.Winner != "ai" || stats.Losses != 1 || loss.PlayerDeployment[0].Alive {
+		t.Fatal(events, stats, loss, err)
+	}
+}
+
+func TestContributionFleetProjectionHidesDeploymentUntilExposure(t *testing.T) {
+	board := mockCells(time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC))[:70]
+	g := &State{Ruleset: game.ContributionFleetRuleset, Status: "battle", Turn: "player", PlayerBoard: board, EnemyBoard: append([]game.Cell(nil), board...), PlayerDeployment: []game.FleetUnit{{Coord: game.Coord{X: 0, Y: 0}, Kind: "reserve", Power: 1, Alive: true}}, EnemyDeployment: []game.FleetUnit{{Coord: game.Coord{X: 1, Y: 1}, Kind: "contribution", ContributionCount: 99, Power: game.DayPower(99), Level: 3, Alive: true}}, PlayerStart: board[0].Date, EnemyStart: board[0].Date}
+	active := publicGame(g)
+	if active["enemyPeriod"] != nil {
+		t.Fatal("enemy period leaked")
+	}
+	for _, cell := range active["enemyCells"].([]map[string]any) {
+		if cell["unitKind"] != nil || cell["unitPower"] != nil || cell["date"] != nil {
+			t.Fatal("hidden deployment leaked", cell)
+		}
+	}
+	g.EnemyDeployment[0].Exposed = true
+	projection := publicGame(g)
+	cell := projection["enemyCells"].([]map[string]any)[8]
+	if cell["state"] != "exposed" || cell["combatLevel"] != 3 || cell["unitPower"] != nil {
+		t.Fatal("exposure projection wrong", cell)
+	}
+	g.Status = "complete"
+	encoded, _ := json.Marshal(publicGame(g))
+	if !strings.Contains(string(encoded), `"unitPower"`) || !strings.Contains(string(encoded), `"enemyPeriod"`) {
+		t.Fatal("terminal reveal incomplete", string(encoded))
+	}
+}
+
+func TestFleetSnapshotSurvivesContributionRefreshAndLegacyCompletionReads(t *testing.T) {
+	repo := NewMemoryRepository()
+	original := mockCells(time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC))
+	u, _ := repo.UpsertGitHubUser(context.Background(), User{GitHubID: 501, Login: "frozen"}, original)
+	g := &State{ID: uuid(), Ruleset: game.ContributionFleetRuleset, Status: "deployment", Turn: "setup", PlayerBoard: append([]game.Cell(nil), original[:70]...), EnemyBoard: append([]game.Cell(nil), original[70:140]...)}
+	_ = repo.CreateGame(context.Background(), u.ID, g)
+	refreshed := mockCells(time.Date(2027, 1, 3, 0, 0, 0, 0, time.UTC))
+	_, _ = repo.UpsertGitHubUser(context.Background(), User{GitHubID: 501, Login: "frozen"}, refreshed)
+	stored, err := repo.Game(context.Background(), u.ID, g.ID)
+	if err != nil || stored.PlayerBoard[0].Date != original[0].Date {
+		t.Fatal("frozen board changed after refresh", err)
+	}
+	legacy := reciprocalState([]int{0}, []int{69})
+	legacy.ID = uuid()
+	legacy.Status, legacy.Turn = "complete", "complete"
+	_ = repo.CreateGame(context.Background(), u.ID, legacy)
+	if _, err = repo.Game(context.Background(), u.ID, legacy.ID); err != nil {
+		t.Fatal("completed v2 game must remain readable", err)
 	}
 }
 
@@ -350,6 +454,24 @@ func TestReciprocalSoloShareUsesResultAndBothPeriods(t *testing.T) {
 	}
 	if img, err := renderSoloShareCard(g, u); err != nil || img.Bounds().Dx() != 1200 {
 		t.Fatal("reciprocal share card failed", err)
+	}
+}
+func TestContributionFleetShareUsesFleetSemantics(t *testing.T) {
+	s, repo := testServer(t)
+	u, _ := repo.UpsertGitHubUser(context.Background(), User{GitHubID: 72, Login: "fleet-user"}, mockCells(s.now()))
+	board := mockCells(s.now())[:70]
+	g := &State{ID: uuid(), Ruleset: game.ContributionFleetRuleset, Status: "complete", Turn: "complete", Winner: "player", PlayerBoard: board, EnemyBoard: append([]game.Cell(nil), board...), PlayerDeployment: []game.FleetUnit{{Coord: game.Coord{X: 0, Y: 0}, Kind: "reserve", Power: 1, Alive: true}}, EnemyDeployment: []game.FleetUnit{{Coord: game.Coord{X: 1, Y: 1}, Kind: "reserve", Power: 1, Alive: false, Exposed: true}}, FleetActions: []game.FleetAction{{Actor: "player", Attacker: game.Coord{X: 0, Y: 0}, Target: game.Coord{X: 1, Y: 1}, Result: "clash", AttackerWon: true, Probability: .5, Roll: .2, AttackerPower: 1, DefenderPower: 1}}, PlayerStart: board[0].Date, EnemyStart: board[0].Date, ShareID: "fleet-share", RatingDelta: 16}
+	_ = repo.CreateGame(context.Background(), u.ID, g)
+	repo.shares[g.ShareID] = g.ID
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/s/fleet-share", nil)
+	r.SetPathValue("id", "fleet-share")
+	s.shareHTML(w, r)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "1 actions") || !strings.Contains(w.Body.String(), "1 clashes") || strings.Contains(w.Body.String(), "targets") {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if img, err := renderSoloShareCard(g, u); err != nil || img.Bounds().Dx() != 1200 {
+		t.Fatal("fleet share card failed", err)
 	}
 }
 func TestPublicProfileWidgetAndEscaping(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 )
 
 func pvpRefit(w http.ResponseWriter) {
-	writeError(w, http.StatusServiceUnavailable, "pvp_refit", "Developer vs Developer is being updated to contribution-target harbours.")
+	writeError(w, http.StatusServiceUnavailable, "pvp_refit", "Developer vs Developer is outside the contribution_fleet_v3 Solo ruleset.")
 }
 
 func (s *Server) pvpRepo(w http.ResponseWriter) (PVPRepository, bool) {
