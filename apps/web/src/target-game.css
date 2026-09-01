@@ -75,11 +75,15 @@ html[data-color-mode=dark] .legend i.unknown { background: #30363d; }
 .strength-preview span,.result-comparison span { color: var(--muted); font-size: 12px; }
 .strength-preview strong,.result-comparison strong { font-size: 15px; }
 .turn-banner { margin-bottom: 18px; }
+.battle-objective { display: grid; gap: 4px; padding: 14px 16px; margin-bottom: 12px; border-radius: 6px; background: color-mix(in srgb, var(--accent) 8%, var(--canvas)); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.battle-objective strong { font-size: 14px; }
+.battle-objective span { color: var(--muted); font-size: 13px; line-height: 1.5; }
 .battle-how-to { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-bottom: 18px; }
 .battle-how-to>div { display: grid; gap: 5px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--canvas); }
 .battle-how-to>div.current { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
 .battle-how-to strong { font-size: 13px; }
 .battle-how-to span { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.battle-how-to small { color: var(--accent); font-size: 12px; font-weight: 600; }
 .duel-progress { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 24px; }
 .duel-progress>div { display: grid; gap: 7px; padding: 14px; border: 1px solid var(--border); border-radius: 6px; }
 .duel-progress span,.board-title small { color: var(--muted); font-size: 12px; }
@@ -89,6 +93,7 @@ html[data-color-mode=dark] .legend i.unknown { background: #30363d; }
 .battle-boards .player-harbour { grid-column: 2; grid-row: 1; }
 .board-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .board-title h2 { margin-bottom: 2px; }
+.board-explanation { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 10px 0 0; }
 .battle-boards .contribution-grid.weeks-10 { min-width: 0; }
 .reveal-versus { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; }
 .reveal-versus>strong { color: var(--muted); }
