@@ -121,6 +121,11 @@ func publicFleetGame(g *State) map[string]any {
 		"aiClashesWon": aiWins, "aiClashesLost": aiClashes - aiWins,
 		"playerPeriod": map[string]string{"start": g.PlayerStart, "end": dateEnd(g.PlayerStart)},
 	}
+	actionStart := len(g.FleetActions) - 6
+	if actionStart < 0 {
+		actionStart = 0
+	}
+	out["recentActions"] = publicFleetEvents(g.FleetActions[actionStart:])
 	if g.Status == "deployment" {
 		out["deploymentRequired"] = len(g.PlayerDeployment) == 0
 	}

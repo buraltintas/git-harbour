@@ -485,6 +485,22 @@ func TestContributionFleetShareUsesFleetSemantics(t *testing.T) {
 		t.Fatal("fleet share card failed", err)
 	}
 }
+
+func TestActiveFleetProjectionExplainsRecentActionsWithoutSecretRolls(t *testing.T) {
+	board := mockCells(time.Now().UTC())[:70]
+	g := &State{Ruleset: game.ContributionFleetRuleset, Status: "battle", Turn: "player", PlayerBoard: board, EnemyBoard: append([]game.Cell(nil), board...), PlayerDeployment: []game.FleetUnit{{Coord: game.Coord{X: 0, Y: 0}, Kind: "reserve", Power: 1, Alive: true, Exposed: true}}, EnemyDeployment: []game.FleetUnit{{Coord: game.Coord{X: 1, Y: 1}, Kind: "reserve", Power: 1, Alive: false, Exposed: true}}, FleetActions: []game.FleetAction{{Actor: "ai", Attacker: game.Coord{X: 1, Y: 1}, Target: game.Coord{X: 0, Y: 0}, Result: "clash", AttackerWon: false, Probability: .5, Roll: .8, AttackerPower: 1, DefenderPower: 1}}, PlayerStart: board[0].Date, EnemyStart: board[0].Date}
+	b, err := json.Marshal(publicGame(g))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(b)
+	if !strings.Contains(text, `"recentActions":[{"actor":"ai"`) || !strings.Contains(text, `"result":"clash"`) {
+		t.Fatal("recent action explanation missing", text)
+	}
+	if strings.Contains(text, `"probability"`) || strings.Contains(text, `"roll"`) || strings.Contains(text, `"attackerPower"`) {
+		t.Fatal("active projection leaked authoritative combat secrets", text)
+	}
+}
 func TestPublicProfileWidgetAndEscaping(t *testing.T) {
 	s, repo := testServer(t)
 	_, _ = repo.UpsertGitHubUser(context.Background(), User{GitHubID: 99, Login: "<alice>", Name: `A & "B"`, AvatarURL: "https://example/a.png"}, mockCells(s.now()))

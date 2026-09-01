@@ -84,6 +84,14 @@ html[data-color-mode=dark] .legend i.unknown { background: #30363d; }
 .battle-how-to strong { font-size: 13px; }
 .battle-how-to span { color: var(--muted); font-size: 12px; line-height: 1.45; }
 .battle-how-to small { color: var(--accent); font-size: 12px; font-weight: 600; }
+.turn-report { display: grid; gap: 8px; margin: 0 0 18px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 6px; background: var(--canvas); }
+.turn-report h3 { margin: 0; font-size: 14px; }
+.turn-report>div { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.turn-report article { display: grid; gap: 4px; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--panel); }
+.turn-report article.miss { border-left-color: var(--muted); }
+.turn-report article strong { font-size: 12px; }
+.turn-report article span,.turn-report.empty span { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.turn-report.empty { gap: 4px; }
 .duel-progress { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 24px; }
 .duel-progress>div { display: grid; gap: 7px; padding: 14px; border: 1px solid var(--border); border-radius: 6px; }
 .duel-progress span,.board-title small { color: var(--muted); font-size: 12px; }
@@ -106,7 +114,7 @@ html[data-color-mode=dark] .legend i.unknown { background: #30363d; }
 }
 
 @media (max-width: 760px) {
-  .selection-actions,.duel-progress,.battle-how-to { display: grid; grid-template-columns: 1fr; }
+  .selection-actions,.duel-progress,.battle-how-to,.turn-report>div { display: grid; grid-template-columns: 1fr; }
   .strength-preview,.result-comparison { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .selection-actions button { width: 100%; }
   .battle-boards { grid-template-columns: 1fr; }
