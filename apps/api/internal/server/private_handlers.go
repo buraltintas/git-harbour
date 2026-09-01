@@ -78,7 +78,7 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "computer_deployment_failed", "Could not prepare the computer fleet.")
 		return
 	}
-	g := &State{ID: uuid(), Ruleset: game.ContributionFleetRuleset, Status: "deployment", Turn: "setup", PlayerBoard: player.Cells, EnemyBoard: enemy.Cells, PlayerDeployment: []game.FleetUnit{}, EnemyDeployment: enemyDeployment, FleetActions: []game.FleetAction{}, PlayerStart: player.Cells[0].Date, EnemyStart: enemy.Cells[0].Date, Stats: stats}
+	g := &State{ID: uuid(), Ruleset: game.ContributionBattleshipRuleset, Status: "deployment", Turn: "setup", PlayerBoard: player.Cells, EnemyBoard: enemy.Cells, PlayerDeployment: []game.FleetUnit{}, EnemyDeployment: enemyDeployment, PlayerTargetShots: []game.TargetShot{}, AITargetShots: []game.TargetShot{}, PlayerStart: player.Cells[0].Date, EnemyStart: enemy.Cells[0].Date, Stats: stats}
 	if e = s.repo.CreateGame(r.Context(), u.ID, g); e != nil {
 		writeError(w, 500, "game_create_failed", "Could not create the game.")
 		return
@@ -168,15 +168,17 @@ func (s *Server) shot(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var c game.Coord
-	if json.NewDecoder(r.Body).Decode(&c) != nil {
+	var request struct {
+		Target game.Coord `json:"target"`
+	}
+	if json.NewDecoder(r.Body).Decode(&request) != nil {
 		writeError(w, 400, "invalid_coordinate", "A target coordinate is required.")
 		return
 	}
-	g, events, e := s.repo.Shoot(r.Context(), u.ID, r.PathValue("id"), c)
+	g, events, e := s.repo.Shoot(r.Context(), u.ID, r.PathValue("id"), request.Target)
 	if e == ErrNotFound {
 		if p, ok := s.repo.(PVPRepository); ok {
-			pg, pev, pe := p.ShootPVP(r.Context(), u.ID, r.PathValue("id"), c)
+			pg, pev, pe := p.ShootPVP(r.Context(), u.ID, r.PathValue("id"), request.Target)
 			if pe == nil {
 				writeJSON(w, 200, map[string]any{"game": pvpDTO(pg), "events": pev})
 				return

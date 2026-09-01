@@ -78,6 +78,9 @@ func decorate(p PublicStats) PublicStats {
 	return p
 }
 func publicGame(g *State) map[string]any {
+	if g.Ruleset == game.ContributionBattleshipRuleset {
+		return publicBattleshipGame(g)
+	}
 	if g.Ruleset == game.ContributionFleetRuleset {
 		return publicFleetGame(g)
 	}
@@ -93,6 +96,84 @@ func publicGame(g *State) map[string]any {
 		m["enemyPeriod"] = map[string]string{"start": g.EnemyStart, "end": dateEnd(g.EnemyStart)}
 	}
 	return m
+}
+
+func publicBattleshipGame(g *State) map[string]any {
+	playerHits, playerMisses := targetShotCounts(g.PlayerTargetShots)
+	aiHits, aiMisses := targetShotCounts(g.AITargetShots)
+	reveal := g.Status == "complete"
+	out := map[string]any{
+		"id": g.ID, "mode": "solo", "ruleset": g.Ruleset, "status": g.Status,
+		"currentTurn": g.Turn, "winner": g.Winner,
+		"playerCells":         projectBattleshipBoard(g.PlayerBoard, g.PlayerDeployment, g.AITargetShots, true, reveal),
+		"enemyCells":          projectBattleshipBoard(g.EnemyBoard, g.EnemyDeployment, g.PlayerTargetShots, false, reveal),
+		"playerFleetCapacity": game.FleetCapacity(game.TargetCount(g.PlayerBoard)),
+		"enemyFleetCapacity":  game.FleetCapacity(game.TargetCount(g.EnemyBoard)),
+		"playerUnitsAlive":    game.AliveCount(g.PlayerDeployment), "enemyUnitsAlive": game.AliveCount(g.EnemyDeployment),
+		"playerSummary": windowSummary(g.PlayerBoard), "stats": g.Stats,
+		"turns": len(g.PlayerTargetShots), "shots": len(g.PlayerTargetShots), "hits": playerHits, "misses": playerMisses,
+		"aiShots": len(g.AITargetShots), "aiHits": aiHits, "aiMisses": aiMisses,
+		"playerPeriod": map[string]string{"start": g.PlayerStart, "end": dateEnd(g.PlayerStart)},
+	}
+	events := make([]game.BattleEvent, 0, len(g.PlayerTargetShots)+len(g.AITargetShots))
+	for i := range g.PlayerTargetShots {
+		events = append(events, game.BattleEvent{Actor: "player", TargetShot: g.PlayerTargetShots[i]})
+		if i < len(g.AITargetShots) {
+			events = append(events, game.BattleEvent{Actor: "ai", TargetShot: g.AITargetShots[i]})
+		}
+	}
+	if start := len(events) - 6; start > 0 {
+		events = events[start:]
+	}
+	out["recentShots"] = events
+	if g.Status == "deployment" {
+		out["deploymentRequired"] = len(g.PlayerDeployment) == 0
+	}
+	if reveal {
+		out["enemyPeriod"] = map[string]string{"start": g.EnemyStart, "end": dateEnd(g.EnemyStart)}
+		out["enemySummary"] = windowSummary(g.EnemyBoard)
+		out["ratingDelta"], out["shareId"] = g.RatingDelta, g.ShareID
+	}
+	return out
+}
+
+func projectBattleshipBoard(board []game.Cell, units []game.FleetUnit, shots []game.TargetShot, own, reveal bool) []map[string]any {
+	byCoord := map[game.Coord]game.FleetUnit{}
+	for _, unit := range units {
+		byCoord[unit.Coord] = unit
+	}
+	shotByCoord := map[game.Coord]game.TargetShot{}
+	for _, shot := range shots {
+		shotByCoord[shot.Coord] = shot
+	}
+	out := make([]map[string]any, 0, len(board))
+	for i, cell := range board {
+		coord := game.Coord{X: i / game.Height, Y: i % game.Height}
+		projected := map[string]any{"x": coord.X, "y": coord.Y, "state": "unknown"}
+		if own || reveal {
+			projected["date"], projected["weekday"] = cell.Date, cell.Weekday
+			projected["contributionCount"], projected["contributionLevel"] = cell.ContributionCount, cell.ContributionLevel
+			projected["state"] = "empty"
+			if cell.ContributionCount > 0 {
+				projected["state"] = "eligible"
+			}
+		}
+		if unit, ok := byCoord[coord]; ok && (own || reveal) {
+			projected["state"] = "deployed"
+			if !unit.Alive {
+				projected["state"] = "eliminated"
+			}
+			projected["unitKind"] = unit.Kind
+		}
+		if shot, ok := shotByCoord[coord]; ok {
+			projected["state"] = shot.Result
+			if shot.Result == "hit" {
+				projected["state"] = "eliminated"
+			}
+		}
+		out = append(out, projected)
+	}
+	return out
 }
 
 func windowSummary(cells []game.Cell) map[string]any {
@@ -511,6 +592,45 @@ func resolveTargetTurn(g *State, p PublicStats, c game.Coord, r game.Rander) ([]
 	g.AITargetShots = append(g.AITargetShots, aiShot)
 	events = append(events, game.BattleEvent{Actor: "ai", TargetShot: aiShot})
 	if aiComplete {
+		p = finishTargetState(g, p, "ai")
+	} else {
+		g.Turn = "player"
+	}
+	return events, p, nil
+}
+func resolveBattleshipTurn(g *State, p PublicStats, c game.Coord, r game.Rander) ([]game.BattleEvent, PublicStats, error) {
+	if g.Ruleset != game.ContributionBattleshipRuleset || len(g.PlayerBoard) != game.BoardCells || len(g.EnemyBoard) != game.BoardCells {
+		return nil, p, ErrLegacyGame
+	}
+	if g.Status == "complete" {
+		return nil, p, ErrGameComplete
+	}
+	if g.Status != "battle" || g.Turn != "player" {
+		return nil, p, ErrNotYourTurn
+	}
+	shot, enemy, err := game.ResolveDeploymentShot(g.EnemyDeployment, g.PlayerTargetShots, c)
+	if err != nil {
+		return nil, p, err
+	}
+	g.EnemyDeployment = enemy
+	g.PlayerTargetShots = append(g.PlayerTargetShots, shot)
+	events := []game.BattleEvent{{Actor: "player", TargetShot: shot}}
+	if game.AliveCount(g.EnemyDeployment) == 0 {
+		return events, finishTargetState(g, p, "player"), nil
+	}
+	g.Turn = "ai"
+	target, err := game.NextTarget(g.AITargetShots, r)
+	if err != nil {
+		return nil, p, err
+	}
+	aiShot, player, err := game.ResolveDeploymentShot(g.PlayerDeployment, g.AITargetShots, target)
+	if err != nil {
+		return nil, p, err
+	}
+	g.PlayerDeployment = player
+	g.AITargetShots = append(g.AITargetShots, aiShot)
+	events = append(events, game.BattleEvent{Actor: "ai", TargetShot: aiShot})
+	if game.AliveCount(g.PlayerDeployment) == 0 {
 		p = finishTargetState(g, p, "ai")
 	} else {
 		g.Turn = "player"

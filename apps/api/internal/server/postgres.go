@@ -77,7 +77,7 @@ func (p *PostgresRepository) UpsertGitHubUser(ctx context.Context, u User, days 
 	if _, e = tx.Exec(ctx, `INSERT INTO mode_stats(user_id,mode) VALUES($1,'solo'),($1,'pvp') ON CONFLICT DO NOTHING`, id); e != nil {
 		return User{}, e
 	}
-	if _, e = tx.Exec(ctx, `INSERT INTO ruleset_mode_stats(user_id,mode,ruleset) VALUES($1,'solo','contribution_targets_v2'),($1,'solo','contribution_fleet_v3') ON CONFLICT DO NOTHING`, id); e != nil {
+	if _, e = tx.Exec(ctx, `INSERT INTO ruleset_mode_stats(user_id,mode,ruleset) VALUES($1,'solo','contribution_targets_v2'),($1,'solo','contribution_fleet_v3'),($1,'solo','contribution_battleship_v4') ON CONFLICT DO NOTHING`, id); e != nil {
 		return User{}, e
 	}
 	if e = tx.Commit(ctx); e != nil {
@@ -165,7 +165,7 @@ func scanStats(row pgx.Row) (PublicStats, error) {
 }
 func (p *PostgresRepository) Stats(ctx context.Context, uid, mode string) (PublicStats, error) {
 	if mode == "solo" {
-		return scanStats(p.pool.QueryRow(ctx, `SELECT games,wins,losses,rating,shots,hits,current_streak,longest_streak,win_shots FROM ruleset_mode_stats WHERE user_id=$1 AND mode='solo' AND ruleset='contribution_fleet_v3'`, uid))
+		return scanStats(p.pool.QueryRow(ctx, `SELECT games,wins,losses,rating,shots,hits,current_streak,longest_streak,win_shots FROM ruleset_mode_stats WHERE user_id=$1 AND mode='solo' AND ruleset='contribution_battleship_v4'`, uid))
 	}
 	return scanStats(p.pool.QueryRow(ctx, `SELECT games,wins,losses,rating,shots,hits,current_streak,longest_streak,win_shots FROM mode_stats WHERE user_id=$1 AND mode=$2`, uid, mode))
 }
@@ -232,9 +232,10 @@ func (p *PostgresRepository) Game(ctx context.Context, uid, id string) (*State, 
 	var g State
 	e = json.Unmarshal(b, &g)
 	g.Ruleset = ruleset
-	validV3 := ruleset == game.ContributionFleetRuleset && len(g.PlayerBoard) == game.BoardCells && len(g.EnemyBoard) == game.BoardCells
+	validV4 := ruleset == game.ContributionBattleshipRuleset && len(g.PlayerBoard) == game.BoardCells && len(g.EnemyBoard) == game.BoardCells
+	readableV3 := ruleset == game.ContributionFleetRuleset && g.Status == "complete"
 	readableV2 := ruleset == "contribution_targets_v2" && g.Status == "complete"
-	if e == nil && !validV3 && !readableV2 {
+	if e == nil && !validV4 && !readableV3 && !readableV2 {
 		return nil, ErrLegacyGame
 	}
 	return &g, e
@@ -255,7 +256,7 @@ func (p *PostgresRepository) DeployFleet(ctx context.Context, uid, id string, ch
 	if e != nil {
 		return nil, e
 	}
-	if ruleset != game.ContributionFleetRuleset {
+	if ruleset != game.ContributionBattleshipRuleset {
 		return nil, ErrLegacyGame
 	}
 	var g State
@@ -345,7 +346,7 @@ func (p *PostgresRepository) Shoot(ctx context.Context, uid, id string, c game.C
 	if e != nil {
 		return nil, nil, e
 	}
-	if ruleset != "contribution_targets_v2" {
+	if ruleset != "contribution_targets_v2" && ruleset != game.ContributionBattleshipRuleset {
 		return nil, nil, ErrLegacyGame
 	}
 	var g State
@@ -353,11 +354,17 @@ func (p *PostgresRepository) Shoot(ctx context.Context, uid, id string, c game.C
 		return nil, nil, e
 	}
 	g.Ruleset = ruleset
-	s, e := scanStats(tx.QueryRow(ctx, `SELECT games,wins,losses,rating,shots,hits,current_streak,longest_streak,win_shots FROM ruleset_mode_stats WHERE user_id=$1 AND mode='solo' AND ruleset='contribution_targets_v2' FOR UPDATE`, uid))
+	s, e := scanStats(tx.QueryRow(ctx, `SELECT games,wins,losses,rating,shots,hits,current_streak,longest_streak,win_shots FROM ruleset_mode_stats WHERE user_id=$1 AND mode='solo' AND ruleset=$2 FOR UPDATE`, uid, ruleset))
 	if e != nil {
 		return nil, nil, e
 	}
-	events, updated, e := resolveTargetTurn(&g, s, c, game.SecureRand{})
+	var events []game.BattleEvent
+	var updated PublicStats
+	if ruleset == game.ContributionBattleshipRuleset {
+		events, updated, e = resolveBattleshipTurn(&g, s, c, game.SecureRand{})
+	} else {
+		events, updated, e = resolveTargetTurn(&g, s, c, game.SecureRand{})
+	}
 	if e != nil {
 		return nil, nil, e
 	}
@@ -366,7 +373,7 @@ func (p *PostgresRepository) Shoot(ctx context.Context, uid, id string, c game.C
 		return nil, nil, e
 	}
 	if g.TerminalApplied {
-		if _, e = tx.Exec(ctx, `UPDATE ruleset_mode_stats SET games=$2,wins=$3,losses=$4,rating=$5,shots=$6,hits=$7,current_streak=$8,longest_streak=$9,win_shots=$10 WHERE user_id=$1 AND mode='solo' AND ruleset='contribution_targets_v2'`, uid, updated.Games, updated.Wins, updated.Losses, updated.Rating, updated.Shots, updated.Hits, updated.CurrentStreak, updated.LongestStreak, updated.WinShots); e != nil {
+		if _, e = tx.Exec(ctx, `UPDATE ruleset_mode_stats SET games=$2,wins=$3,losses=$4,rating=$5,shots=$6,hits=$7,current_streak=$8,longest_streak=$9,win_shots=$10 WHERE user_id=$1 AND mode='solo' AND ruleset=$11`, uid, updated.Games, updated.Wins, updated.Losses, updated.Rating, updated.Shots, updated.Hits, updated.CurrentStreak, updated.LongestStreak, updated.WinShots, ruleset); e != nil {
 			return nil, nil, e
 		}
 		if _, e = tx.Exec(ctx, `INSERT INTO shares(id,game_id) VALUES($1,$2) ON CONFLICT(game_id) DO NOTHING`, g.ShareID, id); e != nil {

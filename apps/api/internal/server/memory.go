@@ -201,9 +201,10 @@ func (m *MemoryRepository) Game(_ context.Context, uid, id string) (*State, erro
 	if g == nil {
 		return nil, ErrNotFound
 	}
-	validV3 := g.Ruleset == game.ContributionFleetRuleset && len(g.PlayerBoard) == game.BoardCells && len(g.EnemyBoard) == game.BoardCells
+	validV4 := g.Ruleset == game.ContributionBattleshipRuleset && len(g.PlayerBoard) == game.BoardCells && len(g.EnemyBoard) == game.BoardCells
+	readableV3 := g.Ruleset == game.ContributionFleetRuleset && g.Status == "complete"
 	readableV2 := g.Ruleset == "contribution_targets_v2" && g.Status == "complete"
-	if !validV3 && !readableV2 {
+	if !validV4 && !readableV3 && !readableV2 {
 		return nil, ErrLegacyGame
 	}
 	return cloneState(g), nil
@@ -218,7 +219,7 @@ func (m *MemoryRepository) DeployFleet(_ context.Context, uid, id string, choice
 	if g == nil {
 		return nil, ErrNotFound
 	}
-	if g.Ruleset != game.ContributionFleetRuleset {
+	if g.Ruleset != game.ContributionBattleshipRuleset {
 		return nil, ErrLegacyGame
 	}
 	if g.Status != "deployment" || len(g.PlayerDeployment) > 0 {
@@ -269,12 +270,24 @@ func (m *MemoryRepository) Shoot(_ context.Context, uid, id string, c game.Coord
 	}
 	p := m.stats[uid]["solo_v2"]
 	next := cloneState(g)
-	events, np, e := resolveTargetTurn(next, p, c, game.SecureRand{})
+	var events []game.BattleEvent
+	var np PublicStats
+	var e error
+	if next.Ruleset == game.ContributionBattleshipRuleset {
+		p = m.stats[uid]["solo"]
+		events, np, e = resolveBattleshipTurn(next, p, c, game.SecureRand{})
+	} else {
+		events, np, e = resolveTargetTurn(next, p, c, game.SecureRand{})
+	}
 	if e != nil {
 		return nil, nil, e
 	}
 	m.games[id] = next
-	m.stats[uid]["solo_v2"] = np
+	if next.Ruleset == game.ContributionBattleshipRuleset {
+		m.stats[uid]["solo"] = np
+	} else {
+		m.stats[uid]["solo_v2"] = np
+	}
 	if next.ShareID != "" {
 		m.shares[next.ShareID] = id
 	}

@@ -17,7 +17,7 @@ Private JSON routes require `Authorization: Bearer <GitHarbour application token
 - `POST /v1/games/solo {playerStart}` freezes the selected period and a server-chosen distinct real period, prepares the hidden computer deployment, and returns `status: deployment`.
 - `POST /v1/games/{id}/deployment {units:[{x,y,kind}]}` validates the exact player deployment and locks it. `kind` is `contribution` or `reserve`.
 - `GET /v1/games/{id}` reads the owner-scoped state.
-- `POST /v1/games/{id}/actions {attacker:{x,y},target:{x,y}}` submits one player action. Unless terminal, the same transaction also resolves one computer response. Missed and eliminated coordinates are closed; an exposed clash survivor remains legally targetable.
+- `POST /v1/games/{id}/shots {target:{x,y}}` submits one player shot. Unless terminal, the same transaction also resolves one computer shot. Previously targeted coordinates are closed.
 
 During setup/battle, `playerCells` contains the owner's dated frozen snapshot, derived power/level, deployed units, alive/exposed state, and computer target marks. `enemyCells` is allow-listed:
 
@@ -28,7 +28,7 @@ During setup/battle, `playerCells` contains the owner's dated frozen snapshot, d
 {"x":3,"y":0,"state":"eliminated","combatLevel":1,"targeted":true}
 ```
 
-Before completion, enemy cells never expose dates, weekdays, contribution counts/levels, exact unit power, complete deployment, or Reserve/contribution kind. The action event projection includes actor, attacker, target, MISS/CLASH, and attacker-won result; persisted probability/roll remains authoritative audit state.
+Before completion, enemy cells never expose dates, weekdays, contribution counts/levels, deployment, or Reserve/contribution kind. The shot event projection includes actor, coordinate, and HIT/MISS result.
 
 Completed responses add the exact enemy period, full snapshot/deployment/powers, combat history, `winner`, `ratingDelta`, and `shareId`. `contribution_targets_v2` completed games remain readable as their own historical ruleset; active legacy games are not converted.
 

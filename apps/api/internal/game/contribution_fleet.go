@@ -9,15 +9,42 @@ import (
 // Contribution Fleet v3 balancing constants live together so the product can
 // tune combat without scattering rules through handlers or UI projections.
 const (
-	ContributionFleetRuleset = "contribution_fleet_v3"
-	MinimumFleetCapacity     = 3
-	MaximumFleetCapacity     = 14
-	ReservePower             = 1.0
-	CombatScale              = 10.0
-	MinimumWinChance         = 0.15
-	MaximumWinChance         = 0.85
-	combatRollPrecision      = 1_000_000
+	ContributionFleetRuleset      = "contribution_fleet_v3"
+	ContributionBattleshipRuleset = "contribution_battleship_v4"
+	MinimumFleetCapacity          = 3
+	MaximumFleetCapacity          = 14
+	ReservePower                  = 1.0
+	CombatScale                   = 10.0
+	MinimumWinChance              = 0.15
+	MaximumWinChance              = 0.85
+	combatRollPrecision           = 1_000_000
 )
+
+// ResolveDeploymentShot implements the familiar Battleship action: the player
+// chooses only an opponent coordinate. A deployed unit at that coordinate is
+// hit and eliminated; an empty coordinate is a miss. Unit power is not an
+// attack input in this ruleset.
+func ResolveDeploymentShot(units []FleetUnit, previous []TargetShot, target Coord) (TargetShot, []FleetUnit, error) {
+	if !InBounds(target) {
+		return TargetShot{}, units, errors.New("shot out of bounds")
+	}
+	for _, shot := range previous {
+		if shot.Coord == target {
+			return TargetShot{}, units, errors.New("duplicate shot")
+		}
+	}
+	next := append([]FleetUnit(nil), units...)
+	shot := TargetShot{Coord: target, Result: "miss"}
+	for i := range next {
+		if next[i].Coord == target && next[i].Alive {
+			next[i].Alive = false
+			next[i].Exposed = true
+			shot.Result = "hit"
+			break
+		}
+	}
+	return shot, next, nil
+}
 
 type FleetWindow struct {
 	StartIndex         int

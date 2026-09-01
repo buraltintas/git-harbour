@@ -265,6 +265,38 @@ func (m *MemoryRepository) Leaderboard(_ context.Context, limit int) ([]Leaderbo
 	}
 	return out, nil
 }
+func (m *MemoryRepository) SoloLeaderboard(_ context.Context, limit int) ([]LeaderboardEntry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := []LeaderboardEntry{}
+	for uid, modes := range m.stats {
+		s := decorate(modes["solo"])
+		if s.Games == 0 {
+			continue
+		}
+		u := m.users[uid]
+		out = append(out, LeaderboardEntry{Login: u.Login, Name: u.Name, AvatarURL: u.AvatarURL, Rank: s.Rank, Rating: s.Rating, Wins: s.Wins, Games: s.Games, WinRate: s.WinRate})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Rating != out[j].Rating {
+			return out[i].Rating > out[j].Rating
+		}
+		if out[i].Wins != out[j].Wins {
+			return out[i].Wins > out[j].Wins
+		}
+		if out[i].Games != out[j].Games {
+			return out[i].Games < out[j].Games
+		}
+		return out[i].Login < out[j].Login
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	for i := range out {
+		out[i].Position = i + 1
+	}
+	return out, nil
+}
 func (m *MemoryRepository) PVPHistory(_ context.Context, uid string, limit int) ([]PVPHistory, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

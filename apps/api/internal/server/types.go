@@ -88,6 +88,7 @@ type Repository interface {
 	Contributions(context.Context, string) ([]game.Cell, error)
 	Stats(context.Context, string, string) (PublicStats, error)
 	PublicUser(context.Context, string) (PublicUser, error)
+	SoloLeaderboard(context.Context, int) ([]LeaderboardEntry, error)
 	CreateGame(context.Context, string, *State) error
 	Game(context.Context, string, string) (*State, error)
 	Shoot(context.Context, string, string, game.Coord) (*State, []game.BattleEvent, error)

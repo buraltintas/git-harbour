@@ -208,6 +208,14 @@ func (s *Server) leaderboard(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]any{"entries": v})
 }
+func (s *Server) soloLeaderboard(w http.ResponseWriter, r *http.Request) {
+	v, e := s.repo.SoloLeaderboard(r.Context(), 50)
+	if e != nil {
+		writeError(w, 500, "leaderboard_failed", "Could not load the Solo leaderboard.")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"entries": v})
+}
 func writePVPError(w http.ResponseWriter, e error) {
 	switch {
 	case errors.Is(e, ErrNotFound):

@@ -493,6 +493,25 @@ func (p *PostgresRepository) Leaderboard(ctx context.Context, limit int) ([]Lead
 	}
 	return out, rows.Err()
 }
+func (p *PostgresRepository) SoloLeaderboard(ctx context.Context, limit int) ([]LeaderboardEntry, error) {
+	rows, e := p.pool.Query(ctx, `SELECT u.login,u.name,u.avatar_url,s.rating,s.wins,s.games FROM ruleset_mode_stats s JOIN users u ON u.id=s.user_id WHERE s.mode='solo' AND s.ruleset='contribution_battleship_v4' AND s.games>0 ORDER BY s.rating DESC,s.wins DESC,s.games ASC,s.user_id ASC LIMIT $1`, limit)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := []LeaderboardEntry{}
+	for rows.Next() {
+		var x LeaderboardEntry
+		if e = rows.Scan(&x.Login, &x.Name, &x.AvatarURL, &x.Rating, &x.Wins, &x.Games); e != nil {
+			return nil, e
+		}
+		x.Position = len(out) + 1
+		x.Rank = decorate(PublicStats{Rating: x.Rating}).Rank
+		x.WinRate = 100 * float64(x.Wins) / float64(x.Games)
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
 func (p *PostgresRepository) PVPHistory(ctx context.Context, uid string, limit int) ([]PVPHistory, error) {
 	rows, e := p.pool.Query(ctx, `SELECT r.game_id,s.id,u.id,u.login,u.name,u.avatar_url,r.won,r.shots,r.hits,r.rating_delta,r.created_at FROM pvp_results r JOIN users u ON u.id=r.opponent_id JOIN shares s ON s.game_id=r.game_id WHERE r.user_id=$1 ORDER BY r.created_at DESC LIMIT $2`, uid, limit)
 	if e != nil {

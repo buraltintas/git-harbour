@@ -7,6 +7,8 @@ import (
 	"image/draw"
 	"math"
 
+	"github.com/githarbour/githarbour/apps/api/internal/game"
+
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/gobold"
 	"golang.org/x/image/font/gofont/goregular"
@@ -55,6 +57,10 @@ func renderSoloShareCard(g *State, u User) (*image.RGBA, error) {
 		playerActions, _, misses, _, clashes, _, wins, _ := fleetMetrics(g.FleetActions)
 		fleetLine = fmt.Sprintf("%d units  ·  %d actions  ·  %d/%d clashes won  ·  %d misses  ·  %+.0d rating", len(g.PlayerDeployment), playerActions, wins, clashes, misses, g.RatingDelta)
 	}
+	if g.Ruleset == game.ContributionBattleshipRuleset {
+		hits, misses := targetShotCounts(g.PlayerTargetShots)
+		fleetLine = fmt.Sprintf("%d units  ·  %d shots  ·  %d hits  ·  %d misses  ·  %+.0d rating", len(g.PlayerDeployment), len(g.PlayerTargetShots), hits, misses, g.RatingDelta)
+	}
 	if len(g.PlayerBoard) != 70 || len(g.EnemyBoard) != 70 {
 		result, playerStart, enemyStart = "ARCHIVED HISTORY HUNT", g.PeriodStart, ""
 		shots, targets, board = g.Shots, g.TargetCount, g.Board
@@ -81,7 +87,7 @@ func renderSoloShareCard(g *State, u User) (*image.RGBA, error) {
 	} else {
 		cardText(img, body, text, 100, 335, fmt.Sprintf("%d targets  ·  %d shots  ·  %.0f%% accuracy  ·  %+.0d rating", hits, len(shots), accuracy, g.RatingDelta))
 	}
-	cardText(img, body, muted, 100, 535, "Activity builds the fleet. Intensity powers it.")
+	cardText(img, body, muted, 100, 535, "Your activity builds your fleet.")
 	levels := []color.RGBA{{33, 38, 45, 255}, {14, 68, 41, 255}, {0, 109, 50, 255}, {38, 166, 65, 255}, {57, 211, 83, 255}}
 	for i, cell := range board {
 		x, y := i/7, i%7

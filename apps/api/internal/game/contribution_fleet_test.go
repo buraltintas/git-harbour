@@ -228,3 +228,21 @@ func TestMissDuplicateImmutableAndComputerKnowledgeBoundary(t *testing.T) {
 		t.Fatalf("AI did not use exposed public knowledge: %v %v %v", attacker, target, err)
 	}
 }
+
+func TestBattleshipShotDirectlyHitsDeploymentOrMisses(t *testing.T) {
+	units := []FleetUnit{{Coord: Coord{1, 1}, Kind: "reserve", Power: 999, Alive: true}}
+	miss, afterMiss, err := ResolveDeploymentShot(units, nil, Coord{2, 2})
+	if err != nil || miss.Result != "miss" || !afterMiss[0].Alive {
+		t.Fatalf("empty water must miss without eliminating a unit: %+v %+v %v", miss, afterMiss, err)
+	}
+	if !units[0].Alive {
+		t.Fatal("shot resolution mutated the frozen input deployment")
+	}
+	hit, afterHit, err := ResolveDeploymentShot(units, []TargetShot{miss}, Coord{1, 1})
+	if err != nil || hit.Result != "hit" || afterHit[0].Alive {
+		t.Fatalf("deployed coordinate must be a direct hit regardless of power: %+v %+v %v", hit, afterHit, err)
+	}
+	if _, _, err = ResolveDeploymentShot(units, []TargetShot{hit}, Coord{1, 1}); err == nil {
+		t.Fatal("duplicate target accepted")
+	}
+}

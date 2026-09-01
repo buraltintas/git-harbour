@@ -24,12 +24,12 @@ The memory repository and mock calendar exist only in development/test with expl
 - `github_identities`: durable unique numeric GitHub ID; no OAuth token column after migration 002.
 - `contribution_days`: normalized public date/count/level data refreshed at login.
 - `oauth_states`, `login_exchange_codes`, `auth_sessions`: hashed authentication credentials with expiry/consumption/revocation.
-- `games`: mode/lifecycle, explicit `fleet_v1`, `contribution_targets_v2`, or active `contribution_fleet_v3` ruleset, and authoritative frozen Solo state.
+- `games`: mode/lifecycle, explicit historical rulesets, or active `contribution_battleship_v4`, and authoritative frozen Solo state.
 - `game_players`: two immutable future PvP contribution snapshots, selected periods and readiness; the legacy fleet column remains only for archived prototype rows.
 - `pvp_shots`, `pvp_results`: archived normalized prototype records plus additive contribution reveal/target-stat fields for the next PvP phase.
 - `mode_stats`: preserved pre-pivot Solo counters and current PvP statistics.
 - `legacy_mode_stats`: immutable copies of pre-pivot fleet counters and temporary one-sided v2 history-hunt counters.
-- `ruleset_mode_stats`: isolated per-ruleset Solo W/L, action/clash rate, streak, and Elo counters. V2 and v3 are never mixed.
+- `ruleset_mode_stats`: isolated per-ruleset Solo W/L, shot accuracy, streak, and Elo counters. V2, v3, and v4 are never mixed.
 - `challenges`: challenge-link preparation only.
 - `shares`: stable unique public result ID per completed game.
 

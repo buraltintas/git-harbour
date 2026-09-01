@@ -251,7 +251,7 @@ func TestPublicGameHidesPersistedEnemyState(t *testing.T) {
 	}
 }
 
-func TestSoloContributionFleetCreateDeployAndAct(t *testing.T) {
+func TestSoloContributionBattleshipCreateDeployAndShoot(t *testing.T) {
 	s, repo := testServer(t)
 	token := devToken(t, s)
 	days, _ := repo.Contributions(context.Background(), repo.sessions[hashKey(digest(token))].UserID)
@@ -287,11 +287,28 @@ func TestSoloContributionFleetCreateDeployAndAct(t *testing.T) {
 	repo.mu.Lock()
 	ready := cloneState(repo.games[response.ID])
 	repo.mu.Unlock()
-	actionBody, _ := json.Marshal(map[string]any{"attacker": ready.PlayerDeployment[0].Coord, "target": game.Coord{X: 0, Y: 0}})
+	if ready.Ruleset != game.ContributionBattleshipRuleset {
+		t.Fatal("new game did not use v4")
+	}
+	actionBody, _ := json.Marshal(map[string]any{"target": game.Coord{X: 0, Y: 0}})
 	action := httptest.NewRecorder()
-	s.Handler().ServeHTTP(action, authed("POST", "/v1/games/"+response.ID+"/actions", token, string(actionBody)))
+	s.Handler().ServeHTTP(action, authed("POST", "/v1/games/"+response.ID+"/shots", token, string(actionBody)))
 	if action.Code != 200 || !strings.Contains(action.Body.String(), `"events"`) {
 		t.Fatal(action.Code, action.Body.String())
+	}
+}
+
+func TestBattleshipTurnIsReciprocalAndStopsAtVictory(t *testing.T) {
+	board := make([]game.Cell, game.BoardCells)
+	loss := &State{Ruleset: game.ContributionBattleshipRuleset, Status: "battle", Turn: "player", PlayerBoard: board, EnemyBoard: append([]game.Cell(nil), board...), PlayerDeployment: []game.FleetUnit{{Coord: game.Coord{X: 0, Y: 0}, Kind: "reserve", Alive: true}}, EnemyDeployment: []game.FleetUnit{{Coord: game.Coord{X: 1, Y: 1}, Kind: "reserve", Alive: true}}}
+	events, _, err := resolveBattleshipTurn(loss, decorate(PublicStats{Rating: 1200}), game.Coord{X: 2, Y: 2}, fixedRand(0))
+	if err != nil || len(events) != 2 || events[0].Result != "miss" || events[1].Result != "hit" || loss.Winner != "ai" {
+		t.Fatalf("expected player miss followed by AI hit and defeat: %+v %+v %v", events, loss, err)
+	}
+	win := &State{Ruleset: game.ContributionBattleshipRuleset, Status: "battle", Turn: "player", PlayerBoard: board, EnemyBoard: append([]game.Cell(nil), board...), PlayerDeployment: []game.FleetUnit{{Coord: game.Coord{X: 0, Y: 0}, Kind: "reserve", Alive: true}}, EnemyDeployment: []game.FleetUnit{{Coord: game.Coord{X: 1, Y: 1}, Kind: "reserve", Alive: true}}}
+	events, _, err = resolveBattleshipTurn(win, decorate(PublicStats{Rating: 1200}), game.Coord{X: 1, Y: 1}, fixedRand(0))
+	if err != nil || len(events) != 1 || events[0].Result != "hit" || win.Winner != "player" || len(win.AITargetShots) != 0 {
+		t.Fatalf("terminal player hit must not grant an AI response: %+v %+v %v", events, win, err)
 	}
 }
 
@@ -366,7 +383,7 @@ func TestFleetSnapshotSurvivesContributionRefreshAndLegacyCompletionReads(t *tes
 	repo := NewMemoryRepository()
 	original := mockCells(time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC))
 	u, _ := repo.UpsertGitHubUser(context.Background(), User{GitHubID: 501, Login: "frozen"}, original)
-	g := &State{ID: uuid(), Ruleset: game.ContributionFleetRuleset, Status: "deployment", Turn: "setup", PlayerBoard: append([]game.Cell(nil), original[:70]...), EnemyBoard: append([]game.Cell(nil), original[70:140]...)}
+	g := &State{ID: uuid(), Ruleset: game.ContributionBattleshipRuleset, Status: "deployment", Turn: "setup", PlayerBoard: append([]game.Cell(nil), original[:70]...), EnemyBoard: append([]game.Cell(nil), original[70:140]...)}
 	_ = repo.CreateGame(context.Background(), u.ID, g)
 	refreshed := mockCells(time.Date(2027, 1, 3, 0, 0, 0, 0, time.UTC))
 	_, _ = repo.UpsertGitHubUser(context.Background(), User{GitHubID: 501, Login: "frozen"}, refreshed)
