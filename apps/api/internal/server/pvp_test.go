@@ -101,8 +101,8 @@ func TestMemoryPVPFullLifecycleStatsHistoryShareAndRematch(t *testing.T) {
 	if share, err := m.PublicPVPShare(ctx, complete.ShareID); err != nil || share.Winner.ID != winner.ID || share.Loser.ID != loser.ID {
 		t.Fatalf("share: %#v, %v", share, err)
 	}
-	if board, _ := m.Leaderboard(ctx, 10); len(board) != 2 || board[0].Login != winner.Login {
-		t.Fatalf("leaderboard: %#v", board)
+	if board, _ := m.Leaderboard(ctx, 10); len(board) != 0 {
+		t.Fatalf("legacy fleet_v1 records must not enter the current PvP leaderboard: %#v", board)
 	}
 
 	rematch, err := m.Rematch(ctx, winner.ID, g.ID, time.Now().Add(time.Hour))

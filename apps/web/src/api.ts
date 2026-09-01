@@ -73,7 +73,8 @@ export const api = {
   cancelChallenge:(code:string)=>request<{challenge:Challenge}>(`/v1/challenges/${encodeURIComponent(code)}/cancel`,{method:'POST'}),
   battles:async()=>normalizeBattles(await request<any>('/v1/battles')),
   rematch:(id:string)=>request<{challenge:Challenge;challengeUrl:string}>(`/v1/games/${encodeURIComponent(id)}/rematch`,{method:'POST'}),
-  leaderboard:()=>request<{entries:LeaderboardEntry[]}>('/v1/public/leaderboards/solo',undefined,false),
+  arcadeLeaderboard:()=>request<{entries:LeaderboardEntry[]}>('/v1/public/leaderboards/solo',undefined,false),
+  pvpLeaderboard:()=>request<{entries:LeaderboardEntry[]}>('/v1/public/leaderboards/pvp',undefined,false),
 };
 
 const friendly:Record<string,string>={pvp_refit:'Developer vs Developer is not part of the current ruleset yet.',history_not_playable:'Your imported history has no distinct second ten-week period. This fallback needs a product decision.',invalid_player_harbour:'Choose a valid contiguous ten-week contribution harbour.',legacy_game_retired:'That earlier battle cannot continue under the current ruleset.',deployment_rejected:'Choose the required contribution units and place every required Reserve.',setup_locked:'This deployment is already locked.',shot_rejected:'Choose one untargeted enemy coordinate.',rate_limited:'Too many shots arrived at once. Wait a moment and continue.',game_not_found:'This battle is unavailable.',game_complete:'This battle is already complete.'};

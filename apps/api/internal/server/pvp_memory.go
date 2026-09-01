@@ -62,7 +62,7 @@ func (m *MemoryRepository) AcceptChallenge(_ context.Context, uid, code string, 
 	c.Opponent = &u
 	c.Status = "accepted"
 	c.GameID = uuid()
-	g := &PVPGame{ID: c.GameID, Status: "setup", ChallengeCode: code, You: PVPPlayer{User: c.Creator, Stats: decorate(m.stats[c.Creator.ID]["pvp"])}, Opponent: PVPPlayer{User: u, Stats: decorate(m.stats[u.ID]["pvp"])}, UpdatedAt: n}
+	g := &PVPGame{ID: c.GameID, Ruleset: "fleet_v1", Status: "setup", ChallengeCode: code, You: PVPPlayer{User: c.Creator, Stats: decorate(m.stats[c.Creator.ID]["pvp"])}, Opponent: PVPPlayer{User: u, Stats: decorate(m.stats[u.ID]["pvp"])}, UpdatedAt: n}
 	m.pvpGames[g.ID] = g
 	return *c, nil, nil
 }
@@ -239,7 +239,14 @@ func (m *MemoryRepository) Leaderboard(_ context.Context, limit int) ([]Leaderbo
 	out := []LeaderboardEntry{}
 	for uid, s := range m.stats {
 		p := s["pvp"]
-		if p.Games == 0 {
+		currentGames := false
+		for _, battle := range m.pvpGames {
+			if battle.Ruleset == game.ContributionBattleshipRuleset && battle.Status == "complete" && (battle.You.User.ID == uid || battle.Opponent.User.ID == uid) {
+				currentGames = true
+				break
+			}
+		}
+		if p.Games == 0 || !currentGames {
 			continue
 		}
 		u := m.users[uid]

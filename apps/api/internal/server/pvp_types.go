@@ -31,14 +31,14 @@ type PVPPlayer struct {
 	Ready bool        `json:"ready"`
 }
 type PVPGame struct {
-	ID, Status, CurrentTurn, Winner, ShareID, ChallengeCode string
-	You, Opponent                                           PVPPlayer
-	StartingPlayer                                          string
-	RatingDelta, RatingBefore, RatingAfter, Hits, ShipsSunk int
-	OpponentRatingDelta, OpponentRatingBefore               int
-	OpponentRatingAfter                                     int
-	LastMove                                                *PVPLastMove
-	UpdatedAt                                               time.Time
+	ID, Ruleset, Status, CurrentTurn, Winner, ShareID, ChallengeCode string
+	You, Opponent                                                    PVPPlayer
+	StartingPlayer                                                   string
+	RatingDelta, RatingBefore, RatingAfter, Hits, ShipsSunk          int
+	OpponentRatingDelta, OpponentRatingBefore                        int
+	OpponentRatingAfter                                              int
+	LastMove                                                         *PVPLastMove
+	UpdatedAt                                                        time.Time
 }
 type PVPLastMove struct {
 	ShooterID string

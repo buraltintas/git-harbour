@@ -1,6 +1,6 @@
 # GitHarbour rules
 
-`contribution_battleship_v4` is the active Solo ruleset. It is familiar Battleship on two frozen GitHub contribution periods: each side deploys units, then fires at one opponent coordinate per turn. The player never selects one of their own units to attack.
+`contribution_battleship_v4` is the active Arcade ruleset. It is familiar Battleship on two frozen GitHub contribution periods: each side deploys units, then fires at one opponent coordinate per turn. The player never selects one of their own units to attack.
 
 ## Battlefield and fleet size
 
@@ -47,11 +47,11 @@ Unless the player's HIT completes the battle, the computer fires once at an unta
 
 The first side to eliminate every deployed opponent unit wins. Completion reveals both frozen periods, contribution metadata, deployments, all HIT/MISS results, fleet sizes, survivors, and rating change. Further shots are rejected.
 
-V4 Solo statistics are isolated from earlier rulesets. `shots` is the number of player shots, `hits` is the number of deployed enemy units hit, and accuracy is `hits / shots`. W/L, streaks, average shots per win, and 32-point Elo against the fixed 1200 computer update exactly once. The active Solo leaderboard uses only v4 statistics.
+V4 Arcade statistics are isolated from earlier rulesets. `shots` is the number of player shots, `hits` is the number of deployed enemy units hit, and accuracy is `hits / shots`. W/L, streaks, average shots per win, and 32-point Elo against the fixed 1200 computer update exactly once. The active Arcade leaderboard uses only v4 statistics.
 
 ## Versioning and PvP
 
-Completed `fleet_v1`, `contribution_targets_v2`, and `contribution_fleet_v3` records remain historical and are never reinterpreted as v4. Legacy power/clash fields may remain in storage solely for compatibility. PvP is not implemented for v4; archived PvP records and infrastructure remain preserved and do not feed the active Solo leaderboard.
+Completed `fleet_v1`, `contribution_targets_v2`, and `contribution_fleet_v3` records remain historical and are never reinterpreted as v4. Legacy power/clash fields may remain in storage solely for compatibility. PvP is not implemented for v4; archived PvP records and infrastructure remain preserved and do not feed the active Arcade leaderboard.
 
 ## Contributor invariant
 
