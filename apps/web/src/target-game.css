@@ -75,11 +75,18 @@ html[data-color-mode=dark] .legend i.unknown { background: #30363d; }
 .strength-preview span,.result-comparison span { color: var(--muted); font-size: 12px; }
 .strength-preview strong,.result-comparison strong { font-size: 15px; }
 .turn-banner { margin-bottom: 18px; }
+.battle-how-to { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-bottom: 18px; }
+.battle-how-to>div { display: grid; gap: 5px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--canvas); }
+.battle-how-to>div.current { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.battle-how-to strong { font-size: 13px; }
+.battle-how-to span { color: var(--muted); font-size: 12px; line-height: 1.45; }
 .duel-progress { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 24px; }
 .duel-progress>div { display: grid; gap: 7px; padding: 14px; border: 1px solid var(--border); border-radius: 6px; }
 .duel-progress span,.board-title small { color: var(--muted); font-size: 12px; }
 .battle-boards { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
 .battle-boards article { min-width: 0; }
+.battle-boards .enemy-harbour { grid-column: 1; grid-row: 1; }
+.battle-boards .player-harbour { grid-column: 2; grid-row: 1; }
 .board-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .board-title h2 { margin-bottom: 2px; }
 .battle-boards .contribution-grid.weeks-10 { min-width: 0; }
@@ -94,13 +101,13 @@ html[data-color-mode=dark] .legend i.unknown { background: #30363d; }
 }
 
 @media (max-width: 760px) {
-  .selection-actions,.duel-progress { display: grid; grid-template-columns: 1fr; }
+  .selection-actions,.duel-progress,.battle-how-to { display: grid; grid-template-columns: 1fr; }
   .strength-preview,.result-comparison { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .selection-actions button { width: 100%; }
   .battle-boards { grid-template-columns: 1fr; }
   .battle-boards .contribution-grid.weeks-10,.reveal-versus .contribution-grid.weeks-10 { min-width: 520px; }
-  .enemy-harbour { order: 1; }
-  .player-harbour { order: 2; border-top: 1px solid var(--border); padding-top: 22px; }
+  .battle-boards .player-harbour { grid-column: 1; grid-row: 1; }
+  .battle-boards .enemy-harbour { grid-column: 1; grid-row: 2; border-top: 1px solid var(--border); padding-top: 22px; }
   .target-battle .board-scroll-hint { display: block; }
   .reveal-versus { grid-template-columns: 1fr; }
   .reveal-versus>strong { text-align: center; }
