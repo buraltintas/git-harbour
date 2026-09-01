@@ -73,6 +73,7 @@ func checkSchema(ctx context.Context, p *pgxpool.Pool) error {
 func (s *Server) Close() { s.repo.Close() }
 func (s *Server) Handler() http.Handler {
 	m := http.NewServeMux()
+	m.HandleFunc("GET /health", s.health)
 	m.HandleFunc("GET /healthz", s.health)
 	m.HandleFunc("GET /auth/github/start", s.oauthStart)
 	m.HandleFunc("GET /auth/github/callback", s.oauthCallback)

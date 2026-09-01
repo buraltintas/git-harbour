@@ -44,6 +44,17 @@ func authed(method, path, token, body string) *http.Request {
 	return r
 }
 
+func TestHealthEndpoints(t *testing.T) {
+	s, _ := testServer(t)
+	for _, path := range []string{"/health", "/healthz"} {
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s returned %d: %s", path, w.Code, w.Body.String())
+		}
+	}
+}
+
 type fixedRand int
 
 func (f fixedRand) Intn(n int) (int, error) { return int(f) % n, nil }
