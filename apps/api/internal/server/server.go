@@ -61,7 +61,7 @@ func NewWithConfig(ctx context.Context, cfg Config, repo Repository, gh GitHubCl
 }
 func checkSchema(ctx context.Context, p *pgxpool.Pool) error {
 	var ok bool
-	e := p.QueryRow(ctx, `SELECT to_regclass('public.auth_sessions') IS NOT NULL AND to_regclass('public.games') IS NOT NULL AND to_regclass('public.pvp_shots') IS NOT NULL AND to_regclass('public.pvp_results') IS NOT NULL AND to_regclass('public.ruleset_mode_stats') IS NOT NULL AND EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='games' AND column_name='ruleset') AND EXISTS(SELECT 1 FROM schema_migrations WHERE version='008_contribution_fleet_v3.sql')`).Scan(&ok)
+	e := p.QueryRow(ctx, `SELECT to_regclass('public.auth_sessions') IS NOT NULL AND to_regclass('public.games') IS NOT NULL AND to_regclass('public.pvp_shots') IS NOT NULL AND to_regclass('public.pvp_results') IS NOT NULL AND to_regclass('public.ruleset_mode_stats') IS NOT NULL AND EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='games' AND column_name='ruleset') AND EXISTS(SELECT 1 FROM schema_migrations WHERE version='009_contribution_fleet_game_constraints.sql')`).Scan(&ok)
 	if e != nil {
 		return e
 	}
