@@ -133,7 +133,9 @@ func SummarizeFleetWindow(cells []Cell, startIndex int) (FleetWindow, error) {
 }
 
 func FleetWindowAt(days []Cell, start string) (FleetWindow, error) {
-	for i := 0; i+BoardCells <= len(days); i += Height {
+	// Imported GitHub history can begin on any weekday, so do not assume index
+	// zero is the beginning of a week. SummarizeFleetWindow validates alignment.
+	for i := 0; i+BoardCells <= len(days); i++ {
 		cells := days[i : i+BoardCells]
 		if len(cells) > 0 && cells[0].Date == start {
 			return SummarizeFleetWindow(cells, i)
@@ -149,7 +151,7 @@ func SelectFleetOpponentWindow(days []Cell, player FleetWindow, r Rander) (Fleet
 		return FleetWindow{}, errors.New("random source is required")
 	}
 	all, nonOverlapping := []FleetWindow{}, []FleetWindow{}
-	for i := 0; i+BoardCells <= len(days); i += Height {
+	for i := 0; i+BoardCells <= len(days); i++ {
 		if i == player.StartIndex {
 			continue
 		}

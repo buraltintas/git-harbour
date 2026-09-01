@@ -7,7 +7,9 @@ export function fleetCapacity(activeDays:number){return Math.max(3,Math.min(14,M
 
 export function playableWindows(days:Day[]){
   const out:{start:string;end:string;cells:Day[];totalContributions:number;activeDays:number;contributionPower:number;fleetCapacity:number;peakCount:number;peakDate:string;maxDeployedPower:number}[]=[];
-  for(let i=0;i+70<=days.length;i+=7){
+  // Imported GitHub history can begin on any weekday. Inspect each possible
+  // start so the first Sunday-aligned window is not skipped permanently.
+  for(let i=0;i+70<=days.length;i++){
     const cells=days.slice(i,i+70);
     if(cells[0].weekday!==0||cells.some((day,index)=>day.weekday!==index%7||index>0&&Date.parse(day.date)-Date.parse(cells[index-1].date)!==86400000))continue;
     const active=cells.filter(day=>day.contributionCount>0);

@@ -7,6 +7,7 @@ import {session} from './session';
 import {ContributionGrid} from './components/ContributionGrid';
 import type {Coord,Day,DeploymentChoice,FleetActionEvent,FleetCell,Game,PublicUser} from './types';
 import {playableWindows} from './solo';
+import {navigateAfterAuth} from './routing';
 import {AuthenticatedPvp,ChallengePage,LeaderboardPage,PvpHistory} from './features/pvp/Pvp';
 
 type Stage='select'|'deployment'|'battle'|'result';
@@ -18,7 +19,7 @@ export default function App(){
   useEffect(()=>{document.documentElement.dataset.colorMode=dark?'dark':'light'},[dark]);
   const themeButton=<button className="theme-button" onClick={()=>setDark(!dark)} aria-label={`Use ${dark?'light':'dark'} theme`}>{dark?<SunIcon/>:<MoonIcon/>}</button>;
   const login=()=>location.assign(api.authStart);
-  if(route.startsWith('#/auth/callback'))return <AuthCallback onDone={next=>{setAuthVersion(v=>v+1);location.hash=next}}/>;
+  if(route.startsWith('#/auth/callback'))return <AuthCallback onDone={next=>{setAuthVersion(v=>v+1);navigateAfterAuth(next,setRoute)}}/>;
   if(route.startsWith('#/u/'))return <PublicProfile login={decodeURIComponent(route.slice(4).split('?')[0])} themeButton={themeButton}/>;
   if(route==='#/leaderboard')return <LeaderboardPage themeButton={themeButton}/>;
   if(route.startsWith('#/challenge/')&&route!=='#/challenge/new')return <ChallengePage code={decodeURIComponent(route.slice('#/challenge/'.length).split('?')[0])} themeButton={themeButton} onNeedAuth={login}/>;

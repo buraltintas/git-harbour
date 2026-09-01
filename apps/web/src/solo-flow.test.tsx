@@ -19,6 +19,20 @@ describe('contribution fleet Solo UI model',()=>{
     expect(choices[0].fleetCapacity).toBe(fleetCapacity(choices[0].activeDays));
   });
 
+  it('finds Sunday-aligned windows when imported history begins midweek',()=>{
+    const start=Date.UTC(2025,0,2); // Thursday
+    const history=Array.from({length:84},(_,i):Day=>({
+      date:new Date(start+i*86400000).toISOString().slice(0,10),
+      weekday:(4+i)%7,
+      contributionCount:i%9===0?2:0,
+      contributionLevel:i%9===0?1:0,
+    }));
+    const choices=playableWindows(history);
+    expect(choices).toHaveLength(2);
+    expect(choices[0].start).toBe('2025-01-05');
+    expect(choices[0].cells[0].weekday).toBe(0);
+  });
+
   it('keeps zero-contribution periods playable and power monotonic',()=>{
     const zero=days().map(day=>({...day,contributionCount:0,contributionLevel:0}));
     expect(playableWindows(zero)[0].fleetCapacity).toBe(3);

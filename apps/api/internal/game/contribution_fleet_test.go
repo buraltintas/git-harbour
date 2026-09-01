@@ -138,6 +138,24 @@ func TestFleetWindowAllowsZeroHistoryAndUsesOnlyAlternative(t *testing.T) {
 	}
 }
 
+func TestFleetWindowsFindWeekAlignmentAfterMidweekHistoryStart(t *testing.T) {
+	start := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC) // Thursday
+	days := make([]Cell, 143)
+	for i := range days {
+		d := start.AddDate(0, 0, i)
+		days[i] = Cell{Date: d.Format("2006-01-02"), Weekday: int(d.Weekday())}
+	}
+
+	player, err := FleetWindowAt(days, "2025-01-05")
+	if err != nil || player.StartIndex != 3 || player.Cells[0].Weekday != 0 {
+		t.Fatalf("midweek-aligned player window not found: %+v %v", player, err)
+	}
+	opponent, err := SelectFleetOpponentWindow(days, player, &sequenceRand{values: []int{0}})
+	if err != nil || opponent.StartIndex != 73 {
+		t.Fatalf("midweek-aligned opponent window not found: %+v %v", opponent, err)
+	}
+}
+
 func TestReserveGenerationAndContributionCoordinateIntegrity(t *testing.T) {
 	board := fleetBoard(map[int]int{0: 600})
 	units, err := ValidateDeployment(board, []DeploymentChoice{
