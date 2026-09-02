@@ -528,6 +528,12 @@ func TestPublicProfileWidgetAndEscaping(t *testing.T) {
 	if w.Code != 200 || w.Header().Get("Content-Type") != "image/svg+xml; charset=utf-8" || strings.Contains(w.Body.String(), "<alice>") || !strings.Contains(w.Body.String(), "#ffffff") {
 		t.Fatal(w.Code, w.Body.String())
 	}
+	if got := w.Header().Get("Cache-Control"); got != "no-cache, no-store, must-revalidate" {
+		t.Fatalf("widget must always revalidate live stats, got Cache-Control %q", got)
+	}
+	if w.Header().Get("Pragma") != "no-cache" || w.Header().Get("Expires") != "0" {
+		t.Fatalf("widget cache prevention headers are incomplete: %#v", w.Header())
+	}
 	h := httptest.NewRecorder()
 	r = httptest.NewRequest("GET", "/u/x", nil)
 	r.SetPathValue("login", "<alice>")

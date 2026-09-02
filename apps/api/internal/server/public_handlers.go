@@ -83,7 +83,11 @@ func (s *Server) widget(w http.ResponseWriter, r *http.Request) {
 		bg, text, muted, border, accent = "#0d1117", "#f0f6fc", "#8c959f", "#30363d", "#3fb950"
 	}
 	w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=300, stale-while-revalidate=3600")
+	// GitHub proxies README images through Camo. Do not let either Camo or an
+	// intermediary keep an old stats card after the player completes a game.
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	fmt.Fprintf(w, `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="140" viewBox="0 0 480 140" role="img" aria-label="GitHarbour stats for @%s"><rect x=".5" y=".5" width="479" height="139" rx="8" fill="%s" stroke="%s"/><path d="M24 20h20v20H24zM29 25h10v10H29z" fill="%s"/><text x="54" y="35" fill="%s" font-family="system-ui,-apple-system,sans-serif" font-size="18" font-weight="700">GitHarbour · @%s</text><text x="24" y="68" fill="%s" font-family="system-ui,-apple-system,sans-serif" font-size="14">Arcade · %s · %d rating · %dW / %dL</text><text x="24" y="95" fill="%s" font-family="system-ui,-apple-system,sans-serif" font-size="14">%d games · %.0f%% accuracy</text><text x="24" y="122" fill="%s" font-family="system-ui,-apple-system,sans-serif" font-size="12">Your activity builds your fleet.</text></svg>`, escape(u.Login), bg, border, accent, text, escape(u.Login), muted, escape(u.Solo.Rank), u.Solo.Rating, u.Solo.Wins, u.Solo.Losses, text, u.Solo.Games, u.Solo.Accuracy, accent)
 }
 func (s *Server) shareHTML(w http.ResponseWriter, r *http.Request) {
