@@ -475,7 +475,7 @@ func (p *PostgresRepository) Rematch(ctx context.Context, uid, gid string, expir
 	return p.PublicChallenge(ctx, actual)
 }
 func (p *PostgresRepository) Leaderboard(ctx context.Context, limit int) ([]LeaderboardEntry, error) {
-	rows, e := p.pool.Query(ctx, `SELECT u.login,u.name,u.avatar_url,s.rating,s.wins,s.games FROM mode_stats s JOIN users u ON u.id=s.user_id WHERE s.mode='pvp' AND s.games>0 AND EXISTS(SELECT 1 FROM pvp_results r JOIN games g ON g.id=r.game_id WHERE r.user_id=s.user_id AND g.mode='pvp' AND g.ruleset='contribution_battleship_v4' AND g.status='complete') ORDER BY s.rating DESC,s.wins DESC,s.games ASC,s.user_id ASC LIMIT $1`, limit)
+	rows, e := p.pool.Query(ctx, `SELECT u.login,u.name,u.avatar_url,s.rating,s.wins,s.games FROM ruleset_mode_stats s JOIN users u ON u.id=s.user_id WHERE s.mode='pvp' AND s.ruleset='contribution_battleship_v4' AND s.games>0 ORDER BY s.rating DESC,s.wins DESC,s.games ASC,s.user_id ASC LIMIT $1`, limit)
 	if e != nil {
 		return nil, e
 	}
@@ -513,7 +513,7 @@ func (p *PostgresRepository) SoloLeaderboard(ctx context.Context, limit int) ([]
 	return out, rows.Err()
 }
 func (p *PostgresRepository) PVPHistory(ctx context.Context, uid string, limit int) ([]PVPHistory, error) {
-	rows, e := p.pool.Query(ctx, `SELECT r.game_id,s.id,u.id,u.login,u.name,u.avatar_url,r.won,r.shots,r.hits,r.rating_delta,r.created_at FROM pvp_results r JOIN users u ON u.id=r.opponent_id JOIN shares s ON s.game_id=r.game_id WHERE r.user_id=$1 ORDER BY r.created_at DESC LIMIT $2`, uid, limit)
+	rows, e := p.pool.Query(ctx, `SELECT r.game_id,s.id,u.id,u.login,u.name,u.avatar_url,r.won,r.shots,r.hits,r.rating_delta,r.created_at FROM pvp_results r JOIN games g ON g.id=r.game_id AND g.ruleset='contribution_battleship_v4' JOIN users u ON u.id=r.opponent_id JOIN shares s ON s.game_id=r.game_id WHERE r.user_id=$1 ORDER BY r.created_at DESC LIMIT $2`, uid, limit)
 	if e != nil {
 		return nil, e
 	}

@@ -74,6 +74,7 @@ type State struct {
 	ShareID           string             `json:"shareId,omitempty"`
 	Stats             PublicStats        `json:"stats"`
 	TerminalApplied   bool               `json:"-"`
+	PVPDefenderID     string             `json:"pvpDefenderId,omitempty"`
 }
 
 type Repository interface {

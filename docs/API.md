@@ -32,8 +32,19 @@ Before completion, enemy cells never expose dates, weekdays, contribution counts
 
 Completed responses add the exact enemy period, full snapshot/deployment/powers, combat history, `winner`, `ratingDelta`, and `shareId`. `contribution_targets_v2` completed games remain readable as their own historical ruleset; active legacy games are not converted.
 
-## Public and PvP
+## Asynchronous PvP
 
-Public routes remain `/v1/public/users/{login}`, `/v1/public/leaderboards/pvp`, `/u/{login}`, `/widgets/{login}.svg`, `/s/{shareId}`, `/share/games/{shareId}.png`, and `/healthz`. New PvP mutations remain gated; v3 does not implement PvP.
+- `GET /v1/pvp/harbour` reads the authenticated developer's current open harbour.
+- `POST /v1/pvp/harbour {playerStart,units}` validates, freezes, deploys, and opens a harbour.
+- `POST /v1/pvp/harbour/close` prevents new challenges without altering existing battles.
+- `GET /v1/pvp/harbours` lists other real open developers without exposing dates, cells, or deployments.
+- `POST /v1/pvp/games {opponentLogin}` starts a battle between two open harbours; the challenger starts.
+- `GET /v1/pvp/games` lists the caller's asynchronous battles (as challenger and defender) with role-relative status, opponent, surviving units, and outcome.
+- `GET /v1/pvp/games/{id}` reads the participant-scoped battle projection.
+- `POST /v1/pvp/games/{id}/shots {target:{x,y}}` resolves one challenger shot and, unless terminal, one random defender return shot in the same transaction.
+
+## Public routes
+
+Public routes remain `/v1/public/users/{login}`, `/v1/public/leaderboards/pvp`, `/u/{login}`, `/widgets/{login}.svg`, `/s/{shareId}`, `/share/games/{shareId}.png`, and `/healthz`. The widget reads live, isolated Arcade and PvP v4 statistics and is served with revalidation/no-store headers.
 
 Errors use `{error:{code,message}}`. `history_not_playable` explicitly represents the unresolved case where no distinct real opponent period exists.

@@ -61,7 +61,7 @@ func NewWithConfig(ctx context.Context, cfg Config, repo Repository, gh GitHubCl
 }
 func checkSchema(ctx context.Context, p *pgxpool.Pool) error {
 	var ok bool
-	e := p.QueryRow(ctx, `SELECT to_regclass('public.auth_sessions') IS NOT NULL AND to_regclass('public.games') IS NOT NULL AND to_regclass('public.pvp_shots') IS NOT NULL AND to_regclass('public.pvp_results') IS NOT NULL AND to_regclass('public.ruleset_mode_stats') IS NOT NULL AND EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='games' AND column_name='ruleset') AND EXISTS(SELECT 1 FROM schema_migrations WHERE version='010_contribution_battleship_v4.sql')`).Scan(&ok)
+	e := p.QueryRow(ctx, `SELECT to_regclass('public.auth_sessions') IS NOT NULL AND to_regclass('public.games') IS NOT NULL AND to_regclass('public.pvp_shots') IS NOT NULL AND to_regclass('public.pvp_results') IS NOT NULL AND to_regclass('public.ruleset_mode_stats') IS NOT NULL AND to_regclass('public.pvp_harbours') IS NOT NULL AND EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='games' AND column_name='ruleset') AND EXISTS(SELECT 1 FROM schema_migrations WHERE version='011_async_pvp_harbours.sql')`).Scan(&ok)
 	if e != nil {
 		return e
 	}
@@ -87,6 +87,14 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /v1/games/{id}/deployment", s.deployFleet)
 	m.HandleFunc("POST /v1/games/{id}/actions", s.fleetAction)
 	m.HandleFunc("POST /v1/games/{id}/shots", s.shot)
+	m.HandleFunc("GET /v1/pvp/harbour", s.getOpenHarbour)
+	m.HandleFunc("POST /v1/pvp/harbour", s.setOpenHarbour)
+	m.HandleFunc("POST /v1/pvp/harbour/close", s.closeOpenHarbour)
+	m.HandleFunc("GET /v1/pvp/harbours", s.listOpenHarbours)
+	m.HandleFunc("POST /v1/pvp/games", s.startAsyncPVP)
+	m.HandleFunc("GET /v1/pvp/games", s.listAsyncPVP)
+	m.HandleFunc("GET /v1/pvp/games/{id}", s.getAsyncPVP)
+	m.HandleFunc("POST /v1/pvp/games/{id}/shots", s.shootAsyncPVP)
 	m.HandleFunc("GET /v1/public/challenges/{code}", s.publicChallenge)
 	m.HandleFunc("POST /v1/challenges", s.createChallenge)
 	m.HandleFunc("POST /v1/challenges/{code}/accept", s.acceptChallenge)

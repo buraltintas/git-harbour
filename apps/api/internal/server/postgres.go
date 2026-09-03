@@ -77,7 +77,7 @@ func (p *PostgresRepository) UpsertGitHubUser(ctx context.Context, u User, days 
 	if _, e = tx.Exec(ctx, `INSERT INTO mode_stats(user_id,mode) VALUES($1,'solo'),($1,'pvp') ON CONFLICT DO NOTHING`, id); e != nil {
 		return User{}, e
 	}
-	if _, e = tx.Exec(ctx, `INSERT INTO ruleset_mode_stats(user_id,mode,ruleset) VALUES($1,'solo','contribution_targets_v2'),($1,'solo','contribution_fleet_v3'),($1,'solo','contribution_battleship_v4') ON CONFLICT DO NOTHING`, id); e != nil {
+	if _, e = tx.Exec(ctx, `INSERT INTO ruleset_mode_stats(user_id,mode,ruleset) VALUES($1,'solo','contribution_targets_v2'),($1,'solo','contribution_fleet_v3'),($1,'solo','contribution_battleship_v4'),($1,'pvp','contribution_battleship_v4') ON CONFLICT DO NOTHING`, id); e != nil {
 		return User{}, e
 	}
 	if e = tx.Commit(ctx); e != nil {
@@ -166,6 +166,9 @@ func scanStats(row pgx.Row) (PublicStats, error) {
 func (p *PostgresRepository) Stats(ctx context.Context, uid, mode string) (PublicStats, error) {
 	if mode == "solo" {
 		return scanStats(p.pool.QueryRow(ctx, `SELECT games,wins,losses,rating,shots,hits,current_streak,longest_streak,win_shots FROM ruleset_mode_stats WHERE user_id=$1 AND mode='solo' AND ruleset='contribution_battleship_v4'`, uid))
+	}
+	if mode == "pvp" {
+		return scanStats(p.pool.QueryRow(ctx, `SELECT games,wins,losses,rating,shots,hits,current_streak,longest_streak,win_shots FROM ruleset_mode_stats WHERE user_id=$1 AND mode='pvp' AND ruleset='contribution_battleship_v4'`, uid))
 	}
 	return scanStats(p.pool.QueryRow(ctx, `SELECT games,wins,losses,rating,shots,hits,current_streak,longest_streak,win_shots FROM mode_stats WHERE user_id=$1 AND mode=$2`, uid, mode))
 }

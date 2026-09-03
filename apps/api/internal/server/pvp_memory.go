@@ -246,6 +246,14 @@ func (m *MemoryRepository) Leaderboard(_ context.Context, limit int) ([]Leaderbo
 				break
 			}
 		}
+		if !currentGames {
+			for gid, battle := range m.games {
+				if battle.Ruleset == game.ContributionBattleshipRuleset && battle.Status == "complete" && (m.owners[gid] == uid || battle.PVPDefenderID == uid) {
+					currentGames = true
+					break
+				}
+			}
+		}
 		if p.Games == 0 || !currentGames {
 			continue
 		}

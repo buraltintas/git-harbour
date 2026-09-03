@@ -1,4 +1,4 @@
-import type { BattleEvent, Battles, Challenge, Coord, Day, DeploymentChoice, Game, LeaderboardEntry, PublicUser, User } from './types';
+import type { AsyncBattleSummary, BattleEvent, Battles, Challenge, Coord, Day, DeploymentChoice, Game, LeaderboardEntry, OpenHarbour, PublicUser, User } from './types';
 import { session } from './session';
 export const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 const emptyStats={games:0,wins:0,losses:0,rating:1200,shots:0,hits:0,currentStreak:0,longestStreak:0,winRate:0,accuracy:0,averageShotsPerWin:0,rank:'Officer'};
@@ -75,7 +75,15 @@ export const api = {
   rematch:(id:string)=>request<{challenge:Challenge;challengeUrl:string}>(`/v1/games/${encodeURIComponent(id)}/rematch`,{method:'POST'}),
   arcadeLeaderboard:()=>request<{entries:LeaderboardEntry[]}>('/v1/public/leaderboards/solo',undefined,false),
   pvpLeaderboard:()=>request<{entries:LeaderboardEntry[]}>('/v1/public/leaderboards/pvp',undefined,false),
+  ownPvpHarbour:()=>request<{open:boolean;harbour?:OpenHarbour}>('/v1/pvp/harbour'),
+  openPvpHarbour:(playerStart:string,units:DeploymentChoice[])=>request<{open:boolean;harbour:OpenHarbour}>('/v1/pvp/harbour',{method:'POST',body:JSON.stringify({playerStart,units})}),
+  closePvpHarbour:()=>request<{open:boolean}>('/v1/pvp/harbour/close',{method:'POST'}),
+  openPvpHarbours:()=>request<{harbours:OpenHarbour[]}>('/v1/pvp/harbours'),
+  startPvp:(opponentLogin:string)=>request<Game>('/v1/pvp/games',{method:'POST',body:JSON.stringify({opponentLogin})}),
+  pvpBattles:()=>request<{battles:AsyncBattleSummary[]}>('/v1/pvp/games'),
+  pvpGame:(id:string)=>request<Game>(`/v1/pvp/games/${encodeURIComponent(id)}`),
+  pvpShot:(id:string,target:Coord)=>request<{game:Game;events:BattleEvent[]}>(`/v1/pvp/games/${encodeURIComponent(id)}/shots`,{method:'POST',body:JSON.stringify({target})}),
 };
 
-const friendly:Record<string,string>={pvp_refit:'Developer vs Developer is not part of the current ruleset yet.',history_not_playable:'Your imported history has no distinct second ten-week period. This fallback needs a product decision.',invalid_player_harbour:'Choose a valid contiguous ten-week contribution harbour.',legacy_game_retired:'That earlier battle cannot continue under the current ruleset.',deployment_rejected:'Choose the required contribution units and place every required Reserve.',setup_locked:'This deployment is already locked.',shot_rejected:'Choose one untargeted enemy coordinate.',rate_limited:'Too many shots arrived at once. Wait a moment and continue.',game_not_found:'This battle is unavailable.',game_complete:'This battle is already complete.'};
+const friendly:Record<string,string>={pvp_refit:'Developer vs Developer is not part of the current ruleset yet.',open_your_harbour:'Open and deploy your own harbour before challenging someone.',harbour_not_open:'That developer is no longer open for battle.',history_not_playable:'Your imported history has no distinct second ten-week period. This fallback needs a product decision.',invalid_player_harbour:'Choose a valid contiguous ten-week contribution harbour.',legacy_game_retired:'That earlier battle cannot continue under the current ruleset.',deployment_rejected:'Choose the required contribution units and place every required Reserve.',setup_locked:'This deployment is already locked.',shot_rejected:'Choose one untargeted enemy coordinate.',rate_limited:'Too many shots arrived at once. Wait a moment and continue.',game_not_found:'This battle is unavailable.',game_complete:'This battle is already complete.'};
 export function friendlyError(error:unknown,fallback='Something went wrong. Try again.') { return error instanceof ApiError?(friendly[error.code]||fallback):fallback; }

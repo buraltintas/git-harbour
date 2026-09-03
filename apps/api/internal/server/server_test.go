@@ -549,6 +549,116 @@ func TestPublicProfileWidgetAndEscaping(t *testing.T) {
 		t.Fatal(missing.Code)
 	}
 }
+
+func TestAsyncPVPOpenHarbourAndReciprocalTurn(t *testing.T) {
+	repo := NewMemoryRepository()
+	now := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
+	days := mockCells(now)
+	alice, err := repo.UpsertGitHubUser(context.Background(), User{GitHubID: 501, Login: "alice"}, days)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := repo.UpsertGitHubUser(context.Background(), User{GitHubID: 502, Login: "bob"}, days)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := game.FleetWindowAt(days, days[0].Date)
+	if err != nil {
+		t.Fatal(err)
+	}
+	units, err := game.ValidateDeployment(w.Cells, deploymentChoices(w.Cells))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = repo.SetOpenHarbour(context.Background(), alice.ID, w.Cells[0].Date, w.Cells, units, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = repo.SetOpenHarbour(context.Background(), bob.ID, w.Cells[0].Date, w.Cells, units, now); err != nil {
+		t.Fatal(err)
+	}
+	open, err := repo.OpenHarbours(context.Background(), alice.ID)
+	if err != nil || len(open) != 1 || open[0].Owner.Login != "bob" || open[0].Board != nil || open[0].Deployment != nil {
+		t.Fatalf("unexpected open harbour projection: %#v, %v", open, err)
+	}
+	battle, err := repo.StartAsyncPVP(context.Background(), alice.ID, "bob", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if battle.State.PVPDefenderID != bob.ID || battle.State.Turn != "player" {
+		t.Fatalf("unexpected battle roles: %#v", battle.State)
+	}
+	defenderView := asyncPVPDTO(battle, bob.ID)
+	if _, leaked := defenderView["playerCells"]; leaked {
+		t.Fatal("active defender projection leaked the challenger's board")
+	}
+	target := battle.State.EnemyDeployment[0].Coord
+	updated, events, err := repo.ShootAsyncPVP(context.Background(), alice.ID, battle.State.ID, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 || events[0].Actor != "player" || events[0].TargetShot.Result != "hit" || events[1].Actor != "ai" {
+		t.Fatalf("expected challenger HIT then automated defender shot, got %#v", events)
+	}
+	if updated.State.Turn != "player" {
+		t.Fatalf("turn must return to challenger, got %q", updated.State.Turn)
+	}
+}
+func TestAsyncPVPBattlesListingAndSummary(t *testing.T) {
+	repo := NewMemoryRepository()
+	now := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
+	days := mockCells(now)
+	alice, _ := repo.UpsertGitHubUser(context.Background(), User{GitHubID: 601, Login: "alice"}, days)
+	bob, _ := repo.UpsertGitHubUser(context.Background(), User{GitHubID: 602, Login: "bob"}, days)
+	w, _ := game.FleetWindowAt(days, days[0].Date)
+	units, err := game.ValidateDeployment(w.Cells, deploymentChoices(w.Cells))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range []User{alice, bob} {
+		if _, err = repo.SetOpenHarbour(context.Background(), u.ID, w.Cells[0].Date, w.Cells, units, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	battle, err := repo.StartAsyncPVP(context.Background(), alice.ID, "bob", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Both participants see the active battle, from their own perspective.
+	al, err := repo.AsyncPVPBattles(context.Background(), alice.ID)
+	if err != nil || len(al) != 1 {
+		t.Fatalf("challenger listing: %#v %v", al, err)
+	}
+	if s := asyncPVPSummaryDTO(al[0], alice.ID); s["role"] != "challenger" || s["yourTurn"] != true || s["status"] != "battle" || s["opponent"].(map[string]any)["login"] != "bob" {
+		t.Fatalf("challenger summary: %#v", s)
+	}
+	bl, err := repo.AsyncPVPBattles(context.Background(), bob.ID)
+	if err != nil || len(bl) != 1 {
+		t.Fatalf("defender listing: %#v %v", bl, err)
+	}
+	if s := asyncPVPSummaryDTO(bl[0], bob.ID); s["role"] != "defender" || s["yourTurn"] != false || s["opponent"].(map[string]any)["login"] != "alice" {
+		t.Fatalf("defender summary: %#v", s)
+	}
+	// Drive to completion and confirm role-relative winner mapping.
+	for i := 0; i < game.BoardCells; i++ {
+		c := game.Coord{X: i / game.Height, Y: i % game.Height}
+		updated, _, shotErr := repo.ShootAsyncPVP(context.Background(), alice.ID, battle.State.ID, c)
+		if shotErr != nil {
+			continue
+		}
+		if updated.State.Status == "complete" {
+			break
+		}
+	}
+	done, err := repo.AsyncPVPBattles(context.Background(), bob.ID)
+	if err != nil || len(done) != 1 || done[0].State.Status != "complete" {
+		t.Fatalf("defender completed listing: %#v %v", done, err)
+	}
+	cs := asyncPVPSummaryDTO(done[0], alice.ID)
+	ds := asyncPVPSummaryDTO(done[0], bob.ID)
+	if cs["winner"] == ds["winner"] || (cs["winner"] != "you" && cs["winner"] != "opponent") {
+		t.Fatalf("winner must be role-relative and opposite: challenger=%v defender=%v", cs["winner"], ds["winner"])
+	}
+}
 func TestProductionRequiresDatabase(t *testing.T) {
 	_, err := NewWithConfig(context.Background(), Config{AppEnv: "production"}, nil, nil)
 	if err == nil {

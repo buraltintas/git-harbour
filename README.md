@@ -30,7 +30,7 @@ cd apps/api && go vet ./...
 3. Use the PostgreSQL Session Pooler connection string for Koyeb's IPv4 network; retain its required `sslmode` settings and percent-encode the password.
 4. Store the connection string only as a Koyeb secret named `DATABASE_URL`.
 5. Run `DATABASE_URL='…' go run ./cmd/migrate up` from `apps/api`, or run the built container once with command `/migrate up`.
-6. Verify `schema_migrations` contains migrations through `010_contribution_battleship_v4.sql`.
+6. Verify `schema_migrations` contains migrations through `011_async_pvp_harbours.sql`. Startup rejects any database missing `011` (it backs asynchronous PvP), so apply it before deploying the PvP release.
 7. Do not configure Supabase Auth.
 8. Do not expose an anon key, service-role key, connection string, or any Supabase credential to the web build.
 
