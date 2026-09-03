@@ -84,6 +84,33 @@ type LeaderboardEntry struct {
 	WinRate   float64 `json:"winRate"`
 }
 
+type OpenHarbour struct {
+	Owner       User             `json:"owner"`
+	PeriodStart string           `json:"periodStart"`
+	Board       []game.Cell      `json:"-"`
+	Deployment  []game.FleetUnit `json:"-"`
+	Capacity    int              `json:"fleetCapacity"`
+	UpdatedAt   time.Time        `json:"updatedAt"`
+}
+
+type AsyncPVPBattle struct {
+	State      *State
+	Challenger User
+	Defender   User
+	UpdatedAt  time.Time
+}
+
+type AsyncPVPRepository interface {
+	SetOpenHarbour(context.Context, string, string, []game.Cell, []game.FleetUnit, time.Time) (OpenHarbour, error)
+	OpenHarbour(context.Context, string) (OpenHarbour, error)
+	CloseOpenHarbour(context.Context, string) error
+	OpenHarbours(context.Context, string) ([]OpenHarbour, error)
+	StartAsyncPVP(context.Context, string, string, time.Time) (*AsyncPVPBattle, error)
+	AsyncPVPGame(context.Context, string, string) (*AsyncPVPBattle, error)
+	AsyncPVPBattles(context.Context, string) ([]*AsyncPVPBattle, error)
+	ShootAsyncPVP(context.Context, string, string, game.Coord) (*AsyncPVPBattle, []game.BattleEvent, error)
+}
+
 type PVPRepository interface {
 	CreateChallenge(context.Context, string, string, time.Time) (Challenge, error)
 	PublicChallenge(context.Context, string) (Challenge, error)

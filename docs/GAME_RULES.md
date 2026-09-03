@@ -49,9 +49,22 @@ The first side to eliminate every deployed opponent unit wins. Completion reveal
 
 V4 Arcade statistics are isolated from earlier rulesets. `shots` is the number of player shots, `hits` is the number of deployed enemy units hit, and accuracy is `hits / shots`. W/L, streaks, average shots per win, and 32-point Elo against the fixed 1200 computer update exactly once. The active Arcade leaderboard uses only v4 statistics.
 
-## Versioning and PvP
+## Asynchronous PvP
 
-Completed `fleet_v1`, `contribution_targets_v2`, and `contribution_fleet_v3` records remain historical and are never reinterpreted as v4. Legacy power/clash fields may remain in storage solely for compatibility. PvP is not implemented for v4; archived PvP records and infrastructure remain preserved and do not feed the active Arcade leaderboard.
+PvP uses the same `contribution_battleship_v4` board, deployment, HIT/MISS, fleet-capacity, Reserve, reveal, and one-shot rules as Arcade, with these approved multiplayer rules:
+
+- A signed-in developer chooses a real ten-week period, deploys its fleet, and explicitly opens that frozen harbour for battle.
+- Only real, currently open developer harbours are listed; there are no dummy opponents.
+- A developer with an open harbour may challenge another open harbour. The challenger fires first.
+- Both deployments are frozen when the battle starts. The defender does not need to be online.
+- After every non-terminal challenger shot, the server makes exactly one random, previously untried return shot for the defender. It does not inspect the challenger's hidden deployment when choosing.
+- HIT grants no extra shot. The first fleet reduced to zero surviving units loses.
+- Completion updates isolated v4 PvP Elo, W/L, shots, hits, accuracy, history, share data, public profile, widget, and the PvP leaderboard for both real accounts.
+- A developer may close their harbour to prevent new challenges. Existing battles remain valid.
+
+## Versioning
+
+Completed `fleet_v1`, `contribution_targets_v2`, and `contribution_fleet_v3` records remain historical and are never reinterpreted as v4. Legacy power/clash fields may remain in storage solely for compatibility. Legacy PvP counters do not feed the active v4 PvP profile, widget, history, or leaderboard.
 
 ## Contributor invariant
 

@@ -32,10 +32,11 @@ type MemoryRepository struct {
 	pvpHistory    map[string][]PVPHistory
 	pvpShares     map[string]PVPShare
 	pvpRematches  map[string]string
+	harbours      map[string]OpenHarbour
 }
 
 func NewMemoryRepository() *MemoryRepository {
-	return &MemoryRepository{users: map[string]User{}, github: map[int64]string{}, contributions: map[string][]game.Cell{}, stats: map[string]map[string]PublicStats{}, oauth: map[string]expiring{}, exchange: map[string]expiring{}, sessions: map[string]expiring{}, games: map[string]*State{}, owners: map[string]string{}, shares: map[string]string{}, challenges: map[string]*Challenge{}, pvpGames: map[string]*PVPGame{}, pvpHistory: map[string][]PVPHistory{}, pvpShares: map[string]PVPShare{}, pvpRematches: map[string]string{}}
+	return &MemoryRepository{users: map[string]User{}, github: map[int64]string{}, contributions: map[string][]game.Cell{}, stats: map[string]map[string]PublicStats{}, oauth: map[string]expiring{}, exchange: map[string]expiring{}, sessions: map[string]expiring{}, games: map[string]*State{}, owners: map[string]string{}, shares: map[string]string{}, challenges: map[string]*Challenge{}, pvpGames: map[string]*PVPGame{}, pvpHistory: map[string][]PVPHistory{}, pvpShares: map[string]PVPShare{}, pvpRematches: map[string]string{}, harbours: map[string]OpenHarbour{}}
 }
 func hashKey(b []byte) string { return string(b) }
 func (m *MemoryRepository) PutOAuthState(_ context.Context, h []byte, e time.Time) error {
